@@ -1,0 +1,371 @@
+{
+  "system": "You have three tools: `list_fact_keys` lists all key names in this task's private fact table; it never reveals values. `lookup` fetches a string value by exact key. `calculator` evaluates an arithmetic expression. Use them when the question depends on stored facts or on arithmetic over those facts. When you have the final result, reply with a short text answer only (no tool calls). Put your final answer in \\boxed{...} (e.g. \\boxed{42} or \\boxed{X9K2M}); scoring uses only the contents of \\boxed{...}.",
+  "tasks": [
+    {
+      "prompt": "At the Haverford flea market ledger, what is the recorded price in cents for lot HF-331?",
+      "target": "42917",
+      "facts": {
+        "haverford_lot_hf331_cents": "42917"
+      }
+    },
+    {
+      "prompt": "In the Willow Creek plot registry, what is the parcel code string for lot WC-912?",
+      "target": "X9K2M",
+      "facts": {
+        "willow_creek_lot_wc912_code": "X9K2M"
+      }
+    },
+    {
+      "prompt": "For the Northbridge school raffle, how many tickets were sold on Track-B?",
+      "target": "1842",
+      "facts": {
+        "northbridge_raffle_track_b_sold": "1842"
+      }
+    },
+    {
+      "prompt": "In the Elm Street community garden log, how many cherry tomato plants are assigned to plot E4?",
+      "target": "37",
+      "facts": {
+        "elm_garden_plot_e4_cherry_count": "37"
+      }
+    },
+    {
+      "prompt": "What is the locker combination digit sequence recorded for row R7 at the Lakeside gym?",
+      "target": "482915",
+      "facts": {
+        "lakeside_gym_row_r7_combo": "482915"
+      }
+    },
+    {
+      "prompt": "On the Marlow shipping manifest, what is the crate weight in kilograms for shipment ML-404?",
+      "target": "156",
+      "facts": {
+        "marlow_ml404_crate_kg": "156"
+      }
+    },
+    {
+      "prompt": "In the Pine Hollow HOA minutes, what is the assessed fee in dollars for unit PH-22?",
+      "target": "240",
+      "facts": {
+        "pine_hollow_unit_ph22_fee_dollars": "240"
+      }
+    },
+    {
+      "prompt": "At the Riverbend farmers co-op, what is the bushel count on file for supplier RB-77?",
+      "target": "91",
+      "facts": {
+        "riverbend_supplier_rb77_bushels": "91"
+      }
+    },
+    {
+      "prompt": "What is the badge ID string for courier shift C on the Greyline roster?",
+      "target": "GL-C-9182",
+      "facts": {
+        "greyline_shift_c_badge": "GL-C-9182"
+      }
+    },
+    {
+      "prompt": "In the Cedar Ridge inventory audit, what count is recorded for bin CR-89?",
+      "target": "712",
+      "facts": {
+        "cedar_ridge_bin_cr89_count": "712"
+      }
+    },
+    {
+      "prompt": "On the Kettle Moraine trail repair sheet, how many meters of fencing are budgeted for segment KM-5?",
+      "target": "428",
+      "facts": {
+        "kettle_moraine_km5_fence_meters": "428"
+      }
+    },
+    {
+      "prompt": "What is the call sign stored for vessel slot VS-14 in the harbor master list?",
+      "target": "N7-BRAVO",
+      "facts": {
+        "harbor_vs14_callsign": "N7-BRAVO"
+      }
+    },
+    {
+      "prompt": "In the Maplewood PTA bake sale tally, how many brownies were counted for tray T-3?",
+      "target": "54",
+      "facts": {
+        "maplewood_tray_t3_brownies": "54"
+      }
+    },
+    {
+      "prompt": "What is 928374 + 481002?",
+      "target": "1409376"
+    },
+    {
+      "prompt": "What is 1000000 - 384729?",
+      "target": "615271"
+    },
+    {
+      "prompt": "What is 18492 * 37?",
+      "target": "684204"
+    },
+    {
+      "prompt": "What is 884736 / 128?",
+      "target": "6912"
+    },
+    {
+      "prompt": "What is (90234 + 11876) * 2?",
+      "target": "204220"
+    },
+    {
+      "prompt": "What is 555555 - 222222?",
+      "target": "333333"
+    },
+    {
+      "prompt": "What is 4096 * 64?",
+      "target": "262144"
+    },
+    {
+      "prompt": "What is 987654 / 123?",
+      "target": "8028"
+    },
+    {
+      "prompt": "What is 17 * 19 * 23?",
+      "target": "7429"
+    },
+    {
+      "prompt": "What is 500000 + 499999?",
+      "target": "999999"
+    },
+    {
+      "prompt": "What is 144 * 144?",
+      "target": "20736"
+    },
+    {
+      "prompt": "What is 100001 - 99999?",
+      "target": "2"
+    },
+    {
+      "prompt": "How many more apples does Alice have than Bob in the Orchard Hill tally?",
+      "target": "16",
+      "facts": {
+        "orchard_hill_alice_apples": "47",
+        "orchard_hill_bob_apples": "31"
+      }
+    },
+    {
+      "prompt": "How many more notebooks does the East wing have than the West wing in the school stock sheet?",
+      "target": "23",
+      "facts": {
+        "school_east_notebooks": "190",
+        "school_west_notebooks": "167"
+      }
+    },
+    {
+      "prompt": "What is the combined number of chairs in Hall A and Hall B per the venue spreadsheet?",
+      "target": "412",
+      "facts": {
+        "venue_hall_a_chairs": "248",
+        "venue_hall_b_chairs": "164"
+      }
+    },
+    {
+      "prompt": "How many fewer liters did Tank 2 hold than Tank 1 on the depot readout?",
+      "target": "35",
+      "facts": {
+        "depot_tank1_liters": "820",
+        "depot_tank2_liters": "785"
+      }
+    },
+    {
+      "prompt": "What is the total number of stamps in Album X and Album Y from the collector log?",
+      "target": "518",
+      "facts": {
+        "collector_album_x_stamps": "263",
+        "collector_album_y_stamps": "255"
+      }
+    },
+    {
+      "prompt": "How many more votes did Option P get than Option Q in the neighborhood poll?",
+      "target": "44",
+      "facts": {
+        "poll_option_p_votes": "312",
+        "poll_option_q_votes": "268"
+      }
+    },
+    {
+      "prompt": "What is the difference in minutes between Shift 1 length and Shift 2 length on the factory board?",
+      "target": "30",
+      "facts": {
+        "factory_shift1_minutes": "480",
+        "factory_shift2_minutes": "450"
+      }
+    },
+    {
+      "prompt": "How many crates arrived on Monday minus how many arrived on Tuesday per the dock tablet?",
+      "target": "17",
+      "facts": {
+        "dock_monday_crates": "94",
+        "dock_tuesday_crates": "77"
+      }
+    },
+    {
+      "prompt": "What is the sum of points for Team Raven and Team Heron in the league scratch pad?",
+      "target": "215",
+      "facts": {
+        "league_raven_points": "108",
+        "league_heron_points": "107"
+      }
+    },
+    {
+      "prompt": "How many more pages did the editor cut from Draft A than from Draft B?",
+      "target": "12",
+      "facts": {
+        "draft_a_pages_cut": "38",
+        "draft_b_pages_cut": "26"
+      }
+    },
+    {
+      "prompt": "What is the product of the two batch sizes for Line 1 and Line 2 (multiply them)?",
+      "target": "8640",
+      "facts": {
+        "line1_batch_size": "96",
+        "line2_batch_size": "90"
+      }
+    },
+    {
+      "prompt": "How many animals are in Barn North plus Barn South according to the county form?",
+      "target": "173",
+      "facts": {
+        "barn_north_animals": "88",
+        "barn_south_animals": "85"
+      }
+    },
+    {
+      "prompt": "What is Tank A volume minus Tank B volume in the chemical lab sheet (same units)?",
+      "target": "125",
+      "facts": {
+        "chem_tank_a_volume": "500",
+        "chem_tank_b_volume": "375"
+      }
+    },
+    {
+      "prompt": "How many more miles are on the odometer reading for Truck 5 than Truck 3?",
+      "target": "18429",
+      "facts": {
+        "odo_truck5_miles": "192847",
+        "odo_truck3_miles": "174418"
+      }
+    },
+    {
+      "prompt": "What is the average of the two sensor readings S1 and S2 if you add them and divide by 2?",
+      "target": "412",
+      "facts": {
+        "sensor_s1_reading": "401",
+        "sensor_s2_reading": "423"
+      }
+    },
+    {
+      "prompt": "How many units must be ordered if the reorder point is the sum of safety stock and weekly use from the planner?",
+      "target": "940",
+      "facts": {
+        "planner_safety_stock": "220",
+        "planner_weekly_use": "720"
+      }
+    },
+    {
+      "prompt": "What is the sum of red, blue, and green marble counts from the jar inventory slip?",
+      "target": "238",
+      "facts": {
+        "jar_red_marbles": "79",
+        "jar_blue_marbles": "82",
+        "jar_green_marbles": "77"
+      }
+    },
+    {
+      "prompt": "How many total coins are in Jar A, Jar B, and Jar C on the fundraiser table?",
+      "target": "511",
+      "facts": {
+        "coins_jar_a": "164",
+        "coins_jar_b": "173",
+        "coins_jar_c": "174"
+      }
+    },
+    {
+      "prompt": "What is Warehouse North stock plus South stock minus East stock (could be negative)?",
+      "target": "40",
+      "facts": {
+        "wh_north_units": "420",
+        "wh_south_units": "310",
+        "wh_east_units": "690"
+      }
+    },
+    {
+      "prompt": "What is the average of the three daily rainfall readings R1, R2, and R3 (add three values, divide by 3)?",
+      "target": "14",
+      "facts": {
+        "rain_r1_mm": "12",
+        "rain_r2_mm": "15",
+        "rain_r3_mm": "15"
+      }
+    },
+    {
+      "prompt": "How many more total apples are in crates C1 and C2 combined than in crate C3 alone?",
+      "target": "29",
+      "facts": {
+        "crate_c1_apples": "52",
+        "crate_c2_apples": "48",
+        "crate_c3_apples": "71"
+      }
+    },
+    {
+      "prompt": "What is (morning sales plus afternoon sales) minus refunds on the kiosk tablet?",
+      "target": "883",
+      "facts": {
+        "kiosk_morning_cents": "41200",
+        "kiosk_afternoon_cents": "38900",
+        "kiosk_refunds_cents": "79217"
+      }
+    },
+    {
+      "prompt": "What is the net change if you add deposits and subtract both withdrawals and fees?",
+      "target": "2150",
+      "facts": {
+        "acct_deposits": "9800",
+        "acct_withdrawals": "6200",
+        "acct_fees": "1450"
+      }
+    },
+    {
+      "prompt": "How many more points did Player A and Player B together score than Player C?",
+      "target": "33",
+      "facts": {
+        "score_player_a": "84",
+        "score_player_b": "77",
+        "score_player_c": "128"
+      }
+    },
+    {
+      "prompt": "What is twice the sum of the first two lane counts minus the third lane count?",
+      "target": "135",
+      "facts": {
+        "lane_count_1": "44",
+        "lane_count_2": "38",
+        "lane_count_3": "29"
+      }
+    },
+    {
+      "prompt": "What is the remainder-free integer result of dividing the total of batches B1 and B2 by batch B3 size?",
+      "target": "12",
+      "facts": {
+        "batch_b1": "96",
+        "batch_b2": "48",
+        "batch_b3": "12"
+      }
+    },
+    {
+      "prompt": "In the split-the-bill worksheet, what is each person's share if the total is the sum of food, drinks, and tax, divided by 4?",
+      "target": "42",
+      "facts": {
+        "bill_food": "72",
+        "bill_drinks": "44",
+        "bill_tax": "52"
+      }
+    }
+  ]
+}
