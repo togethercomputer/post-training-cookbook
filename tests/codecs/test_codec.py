@@ -15,15 +15,28 @@ from post_training_cookbook.codecs import (
     Glm5Codec,
     KimiK3Codec,
     MiniMaxM3Codec,
+    MuseSparkCodec,
     Qwen35Codec,
     get_codec,
     parse_completion,
     resolve_codec_class,
 )
 from post_training_cookbook.codecs.base import MessageCodec, messages_for_template
+from post_training_cookbook.envs.base import Action
+from post_training_cookbook.grpo.multi_turn import flatten_episode
 from post_training_cookbook.sft.train import TRAIN_ON_ALL, render_conversation
 from post_training_cookbook.types import Message, ToolCall, ToolCallFunction, ToolSpec
-from tests.codecs import REFERENCE_MODELS, THINKING_OFF_MODELS, TWO_TURN_CONVERSATION, single_token, trained_runs
+from tests.codecs import (
+    REFERENCE_MODELS,
+    THINKING_OFF_MODELS,
+    TWO_TURN_CONVERSATION,
+    load_reference_codec,
+    single_token,
+    trained_runs,
+)
+from tests.codecs.test_kimi_k3 import KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS
+from tests.codecs.test_minimax_m3 import MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS
+from tests.codecs.test_muse_spark import MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS
 
 _GLM5 = REFERENCE_MODELS["glm-5"]
 _MODELS = list(REFERENCE_MODELS.values())
@@ -35,6 +48,7 @@ _KEEPS_HISTORY_REASONING: dict[str, bool] = {
     _GLM5: True,
     REFERENCE_MODELS["kimi-k3"]: True,
     REFERENCE_MODELS["minimax-m3"]: True,
+    REFERENCE_MODELS["muse-spark"]: True,
 }
 
 
@@ -239,6 +253,78 @@ class TestParseResponseRoundTrip:
             assert not ok or calls == [("get_weather", {"location": "Paris"})], codec.decode(with_call[:cut])
 
 
+# Per family: turns as the model samples them, keyed by the `enable_thinking` they were sampled under, and
+# the tools they call. Each lives in the family's test module, since only its wire helpers can build shapes
+# the template never renders.
+_SAMPLED_TURN_FAMILIES = {
+    "kimi-k3": (KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS),
+    "minimax-m3": (MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS),
+    "muse-spark": (MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS),
+}
+
+
+def _tool_results(msg: Message, *, named: bool = True) -> list[Message]:
+    return [
+        Message(
+            role="tool", content="ok", tool_call_id=call["id"], **({"name": call["function"]["name"]} if named else {})
+        )
+        for call in msg.get("tool_calls", [])
+    ]
+
+
+class TestSampledTurnRoundTrip:
+    """Tokens → Message → tokens on sampled turns.
+
+    Prompt + sampled tokens must prefix the next prompt, which re-renders the turn, or the episode splits there.
+    """
+
+    _PROMPT: list[Message] = [Message(role="user", content="Look up holder H-6666.")]
+
+    @pytest.mark.parametrize(
+        "family, enable_thinking, shape",
+        [
+            pytest.param(family, thinking, shape, id=f"{family}-{shape}")
+            for family, (sampled_turns, _) in _SAMPLED_TURN_FAMILIES.items()
+            for thinking, shapes in sampled_turns.items()
+            for shape in shapes
+        ],
+    )
+    def test_sampled_turn_prefixes_next_prompt(self, family: str, enable_thinking: bool | None, shape: str):
+        sampled_turns, tools = _SAMPLED_TURN_FAMILIES[family]
+        codec = load_reference_codec(REFERENCE_MODELS[family], enable_thinking=enable_thinking)
+        prompt = codec.encode_messages(self._PROMPT, tools=tools, add_generation_prompt=True)
+        sampled = codec.encode(sampled_turns[enable_thinking][shape])
+        msg, ok = codec.parse_response(sampled, tools=tools)
+        assert ok
+        following = codec.encode_messages(
+            self._PROMPT + [msg] + _tool_results(msg), tools=tools, add_generation_prompt="tool_calls" in msg
+        )
+        assert following[: len(prompt) + len(sampled)] == prompt + sampled
+
+    @pytest.mark.parametrize("named", [True, False], ids=["named-results", "unnamed-results"])
+    @pytest.mark.parametrize(
+        "family, enable_thinking",
+        [
+            pytest.param(family, thinking, id=f"{family}-thinking-{thinking}")
+            for family, (sampled_turns, _) in _SAMPLED_TURN_FAMILIES.items()
+            for thinking in sampled_turns
+        ],
+    )
+    def test_tool_loop_packs_into_one_sequence(self, family: str, enable_thinking: bool | None, named: bool):
+        """Every sampled shape in one episode, each call answered and each answer followed up, is one sequence."""
+        sampled_turns, tools = _SAMPLED_TURN_FAMILIES[family]
+        codec = load_reference_codec(REFERENCE_MODELS[family], enable_thinking=enable_thinking)
+        messages, actions = list(self._PROMPT), []
+        for text in sampled_turns[enable_thinking].values():
+            sampled = codec.encode(text)
+            msg, ok = codec.parse_response(sampled, tools=tools)
+            assert ok
+            follow_up = _tool_results(msg, named=named) or [Message(role="user", content="And H-7777?")]
+            messages += [msg, *follow_up]
+            actions.append(Action(sampled, [0.0] * len(sampled)))
+        assert len(flatten_episode(codec, messages, actions, tools)) == 1
+
+
 class TestToolArgTypePreservation:
     """Codec contract: parse_response returns tool-call arguments whose Python types
     match the tool's declared JSON-schema types, regardless of wire format (Qwen3.5
@@ -254,6 +340,7 @@ class TestToolArgTypePreservation:
                 "zip": {"type": "string"},  # numeric-looking STRING — the bug case
                 "count": {"type": "integer"},
                 "ratio": {"type": "number"},
+                "whole": {"type": "number"},
                 "flag": {"type": "boolean"},
                 "opt": {"type": "null"},
                 "tags": {"type": "array"},
@@ -274,6 +361,7 @@ class TestToolArgTypePreservation:
             "zip": "32286",
             "count": 3,
             "ratio": 0.5,
+            "whole": 3,
             "flag": True,
             "opt": None,
             "tags": ["a", "b"],
@@ -298,8 +386,9 @@ class TestToolArgTypePreservation:
         assert ok
         args = json.loads(msg["tool_calls"][0]["function"]["arguments"])
         assert isinstance(args["zip"], str) and args["zip"] == "32286"  # not int 32286
-        assert isinstance(args["count"], int) and args["count"] == 3
+        assert json.dumps(args["count"]) == "3"  # not 3.0 or True
         assert isinstance(args["ratio"], float) and args["ratio"] == 0.5
+        assert json.dumps(args["whole"]) == "3"  # not 3.0, which re-renders differently
         assert args["flag"] is True
         # MiniMax-M3's template omits a null argument rather than rendering it.
         assert args.get("opt") is None
@@ -362,7 +451,7 @@ class TestPreserveThinking:
     @pytest.mark.parametrize("enable_thinking", [None, True])
     @pytest.mark.parametrize("model", _MODELS)
     def test_without_preserve_history_follows_the_template(self, model: str, enable_thinking: bool | None):
-        codec = get_codec(model, enable_thinking=enable_thinking)
+        codec = load_reference_codec(model, enable_thinking=enable_thinking)
         rendered = codec.decode(codec.encode_messages(self._MESSAGES, add_generation_prompt=True))
         assert ("careful chain of thought" in rendered) is _KEEPS_HISTORY_REASONING[model]
 
@@ -375,7 +464,7 @@ class TestPreserveThinking:
     @pytest.mark.parametrize("model", _MODELS)
     def test_preserve_false_strips_history_reasoning(self, model: str):
         """Reasoning before the last user message is dropped; the tool loop answering it keeps its own."""
-        codec = get_codec(model, preserve_thinking=False)
+        codec = load_reference_codec(model, preserve_thinking=False)
         call = ToolCall(id="call_1", function=ToolCallFunction(name="lookup", arguments='{"q": "x"}'))
         messages = self._MESSAGES + [
             Message(role="assistant", reasoning_content="loop reasoning", tool_calls=[call]),
@@ -438,7 +527,8 @@ class TestPreserveThinking:
 
 
 def _gen_prompt(model: str, **kwargs) -> list[int]:
-    return get_codec(model, **kwargs).encode_messages([Message(role="user", content="q")], add_generation_prompt=True)
+    codec = load_reference_codec(model, **kwargs)
+    return codec.encode_messages([Message(role="user", content="q")], add_generation_prompt=True)
 
 
 @pytest.mark.parametrize("model", _MODELS)
@@ -470,6 +560,8 @@ _STOP_TOKENS: dict[str, tuple[str, ...]] = {
     # Kimi-K3 ends every message, assistant turns included, with `<|end_of_msg|>`.
     REFERENCE_MODELS["kimi-k3"]: ("<|end_of_msg|>",),
     REFERENCE_MODELS["minimax-m3"]: ("[e~[",),
+    # Muse Spark closes a turn with `<|eot|>`; `<|eom|>` between its channels does not stop sampling.
+    REFERENCE_MODELS["muse-spark"]: ("<|eot|>",),
 }
 
 
@@ -479,7 +571,7 @@ def test_every_trained_turn_ends_on_a_stop_token(model: str):
     no stop token teaches the model to generate until the token budget runs out. GLM needs
     `turn_terminator` for this: its template closes a turn with the *next* message's role
     marker, so nothing inside the turn stops it."""
-    codec = get_codec(model)
+    codec = load_reference_codec(model)
     stop_ids = {single_token(codec, token) for token in _STOP_TOKENS[model]}
     runs = trained_runs(
         render_conversation(TWO_TURN_CONVERSATION, codec=codec, train_on_what=TRAIN_ON_ALL, max_length=4096)
@@ -498,6 +590,7 @@ _THINKING_EFFORTS: dict[str, tuple[tuple[str, ...], str | None]] = {
     _GLM5: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["kimi-k3"]: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["minimax-m3"]: ((), None),
+    REFERENCE_MODELS["muse-spark"]: (("low", "medium", "high", "xhigh"), "xhigh"),
 }
 
 
@@ -552,6 +645,8 @@ class TestCodecRouting:
             ("moonshotai/Kimi-K3-262k", KimiK3Codec),
             ("MiniMaxAI/MiniMax-M3", MiniMaxM3Codec),
             ("MiniMaxAI/MiniMax-M3-MXFP8", MiniMaxM3Codec),
+            ("meta-models/Muse-Spark-Open-816B-A42B", MuseSparkCodec),
+            ("meta-models/Muse-Spark-Open-816B-A42B-NVFP4", MuseSparkCodec),
         ],
     )
     def test_resolves_expected_codec(self, model: str, expected: type[MessageCodec]):

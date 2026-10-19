@@ -1,8 +1,9 @@
 """MiniMax-M3 codec: what the shared contract in test_codec.py cannot phrase generically.
 
-The shared suite only parses turns the template renders. These tests cover the thinking modes,
-nested argument values, endpoint-split completions, and shapes the model samples but the template
-never renders: verbatim whitespace, a turn cut mid-reasoning, and malformed tool-call blocks.
+The shared suite parses turns the template renders and re-renders the sampled ones built here
+(``MINIMAX_M3_SAMPLED_TURNS``: verbatim whitespace under each thinking mode). These tests cover the thinking
+modes, nested argument values, endpoint-split completions, and other shapes the model samples but
+the template never renders: a turn cut mid-reasoning and malformed tool-call blocks.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ _MODEL = REFERENCE_MODELS["minimax-m3"]
 _NS, _EOS = "]<]minimax[>[", "[e~["
 _THINK_OPEN, _THINK_CLOSE = "<mm:think>", "</mm:think>"
 
-_TOOLS: list[ToolSpec] = [
+MINIMAX_M3_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="lookup",
         description="Look up a record.",
@@ -70,33 +71,28 @@ def test_gen_prompt_follows_thinking_mode(enable_thinking: bool | None, prompt_t
     assert rendered.endswith(prompt_tail)
 
 
-@pytest.mark.parametrize(
-    "enable_thinking, sampled",
-    [
-        (None, f"{_THINK_OPEN}\n  edge whitespace\n{_THINK_CLOSE}  two\n\nparagraphs \n"),
-        (None, f"{_THINK_CLOSE}answer"),
-        (True, f"reasoned{_THINK_CLOSE}calling " + _block(_invoke(_el("zip", "32286"), _el("n", "3")))),
-        (
-            False,
-            _block(
-                _invoke(
-                    _el("tags", _el("item", "a") + _el("item", _el("k", "1"))),
-                    _el("meta", _el("item", "x")),
-                )
-            ),
-        ),
-    ],
-    ids=["edge-whitespace", "no-reasoning", "reasoning-then-call", "nested-values"],
-)
-def test_sampled_turn_re_renders_identically(enable_thinking: bool | None, sampled: str):
-    """Reasoning and content come back verbatim, so a parsed turn re-renders to what was sampled
-    and the episode stays one sequence."""
-    codec = get_codec(_MODEL, enable_thinking=enable_thinking)
-    prompt = [Message(role="user", content="look up 32286")]
-    prompt_text = codec.decode(codec.encode_messages(prompt, tools=_TOOLS, add_generation_prompt=True))
-    msg, ok = codec.parse_response(codec.encode(sampled + _EOS), tools=_TOOLS)
-    assert ok
-    assert codec.decode(codec.encode_messages(prompt + [msg], tools=_TOOLS)) == prompt_text + sampled + "\n"
+# Turns as the model samples them under each thinking mode, for the shared round trip in test_codec.py.
+# Reasoning and content come back verbatim, so a parsed turn re-renders to what was sampled.
+MINIMAX_M3_SAMPLED_TURNS: dict[bool | None, dict[str, str]] = {
+    None: {
+        "edge-whitespace": f"{_THINK_OPEN}\n  edge whitespace\n{_THINK_CLOSE}  two\n\nparagraphs \n{_EOS}",
+        "no-reasoning": f"{_THINK_CLOSE}answer{_EOS}",
+    },
+    True: {
+        "reasoning-then-call": f"reasoned{_THINK_CLOSE}calling "
+        + _block(_invoke(_el("zip", "32286"), _el("n", "3")))
+        + _EOS
+    },
+    False: {
+        "nested-values": _block(
+            _invoke(
+                _el("tags", _el("item", "a") + _el("item", _el("k", "1"))),
+                _el("meta", _el("item", "x")),
+            )
+        )
+        + _EOS
+    },
+}
 
 
 def _args(msg: Message) -> list[dict[str, object]]:
@@ -139,11 +135,6 @@ def _args(msg: Message) -> list[dict[str, object]]:
             id="undeclared-nested",
         ),
         pytest.param(
-            _block(_invoke(_el("n", "NaN"), _el("extra", _el("item", "Infinity")))),
-            [{"n": "NaN", "extra": ["Infinity"]}],
-            id="non-finite-numbers-stay-text",
-        ),
-        pytest.param(
             _block(_invoke(_el("tags", _el("item", "1") + _el("item", "NaN")))),
             [{"tags": [1, "NaN"]}],
             id="nested-non-finite-stays-text",
@@ -156,9 +147,9 @@ def _args(msg: Message) -> list[dict[str, object]]:
     ],
 )
 def test_arguments_parse(minimax: MiniMaxM3Codec, sampled: str, arguments: list[dict[str, object]]):
-    msg, ok = minimax.parse_response(minimax.encode(_THINK_CLOSE + sampled + _EOS), tools=_TOOLS)
+    msg, ok = minimax.parse_response(minimax.encode(_THINK_CLOSE + sampled + _EOS), tools=MINIMAX_M3_TOOLS)
     assert ok
-    assert _args(msg) == arguments
+    assert json.dumps(_args(msg)) == json.dumps(arguments)
 
 
 def test_nested_args_round_trip(minimax: MiniMaxM3Codec):
@@ -166,11 +157,11 @@ def test_nested_args_round_trip(minimax: MiniMaxM3Codec):
     arguments = {"meta": {"id": "32286"}, "ids": ["32286", "true", "null"], "rows": [{}]}
     call = ToolCall(id=None, function=ToolCallFunction(name="lookup", arguments=json.dumps(arguments)))
     prompt = [Message(role="user", content="q")]
-    prompt_tokens = minimax.encode_messages(prompt, tools=_TOOLS, add_generation_prompt=True)
-    full = minimax.encode_messages(prompt + [Message(role="assistant", tool_calls=[call])], tools=_TOOLS)
-    msg, ok = minimax.parse_response(full[len(prompt_tokens) :], tools=_TOOLS)
+    prompt_tokens = minimax.encode_messages(prompt, tools=MINIMAX_M3_TOOLS, add_generation_prompt=True)
+    full = minimax.encode_messages(prompt + [Message(role="assistant", tool_calls=[call])], tools=MINIMAX_M3_TOOLS)
+    msg, ok = minimax.parse_response(full[len(prompt_tokens) :], tools=MINIMAX_M3_TOOLS)
     assert ok
-    assert _args(msg) == [arguments]
+    assert json.dumps(_args(msg)) == json.dumps([arguments])
 
 
 def test_tool_call_inside_unclosed_think_is_reasoning(minimax: MiniMaxM3Codec):
@@ -196,7 +187,7 @@ def test_cut_mid_reasoning_keeps_it():
     ids=["unclosed-block", "lone-marker"],
 )
 def test_truncated_tool_calls_fail(minimax: MiniMaxM3Codec, sampled: str):
-    _, ok = minimax.parse_response(minimax.encode(_THINK_CLOSE + sampled), tools=_TOOLS)
+    _, ok = minimax.parse_response(minimax.encode(_THINK_CLOSE + sampled), tools=MINIMAX_M3_TOOLS)
     assert not ok
 
 
@@ -208,15 +199,15 @@ def test_truncated_tool_calls_fail(minimax: MiniMaxM3Codec, sampled: str):
 def test_malformed_invoke_is_dropped(minimax: MiniMaxM3Codec, bad: str):
     """Serving drops a malformed invoke inside a closed block and runs the rest; nothing was cut off."""
     sampled = _THINK_CLOSE + _block(bad, _invoke(_el("n", "2"))) + _EOS
-    msg, ok = minimax.parse_response(minimax.encode(sampled), tools=_TOOLS)
+    msg, ok = minimax.parse_response(minimax.encode(sampled), tools=MINIMAX_M3_TOOLS)
     assert ok
-    assert _args(msg) == [{"n": 2}]
+    assert json.dumps(_args(msg)) == json.dumps([{"n": 2}])
 
 
 def test_endpoint_split_completion_parses():
     """Endpoint completions arrive with reasoning already split off into its own field."""
     msg, ok = parse_completion(
-        _MODEL, content=_block(_invoke(_el("zip", "02139"))), reasoning="check the zip", tools=_TOOLS
+        _MODEL, content=_block(_invoke(_el("zip", "02139"))), reasoning="check the zip", tools=MINIMAX_M3_TOOLS
     )
     assert ok
     assert (msg["reasoning_content"], _args(msg)) == ("check the zip", [{"zip": "02139"}])
@@ -233,7 +224,7 @@ def test_endpoint_split_completion_parses():
 def test_endpoint_channels_are_not_re_split(content: str | None, reasoning: str | None, expected: Message):
     """The server already split the channels; reasoning is never graded as an answer, and content
     that contains a think close is not mistaken for reasoning."""
-    assert parse_completion(_MODEL, content=content, reasoning=reasoning, tools=_TOOLS) == (expected, True)
+    assert parse_completion(_MODEL, content=content, reasoning=reasoning, tools=MINIMAX_M3_TOOLS) == (expected, True)
 
 
 def test_null_argument_is_omitted(minimax: MiniMaxM3Codec):

@@ -1,8 +1,9 @@
 """Kimi-K3 codec: what the shared contract in test_codec.py cannot phrase generically.
 
-The shared suite only parses turns the encoder renders. These tests cover shapes the model samples
-but the encoder never renders: literals it keeps verbatim, a turn with no response channel,
-wire-typed arguments, and malformed tool sections.
+The shared suite parses turns the encoder renders and re-renders the sampled ones built here
+(``KIMI_K3_SAMPLED_TURNS``: literals the encoder keeps verbatim). These tests cover other shapes the model
+samples but the encoder never renders: a turn with no response channel, wire-typed arguments, and
+malformed tool sections.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from tests.codecs import REFERENCE_MODELS
 # The wire markers, spelled out so the tests pin the format rather than the codec's constants.
 _OPEN, _CLOSE, _SEP, _END_OF_MSG = "<|open|>", "<|close|>", "<|sep|>", "<|end_of_msg|>"
 
-_TOOLS: list[ToolSpec] = [
+KIMI_K3_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="fetch_holder",
         description="Look up a holder record.",
@@ -59,10 +60,11 @@ def kimi() -> KimiK3Codec:
     return get_codec(REFERENCE_MODELS["kimi-k3"])
 
 
-@pytest.mark.parametrize(
-    "sampled",
-    [
-        "r"
+# Turns as the model samples them, for the shared round trip in test_codec.py. The encoder keeps argument
+# literals and text verbatim, so canonicalizing either (2.50 → 2.5, stripping) would split the episode there.
+KIMI_K3_SAMPLED_TURNS: dict[bool | None, dict[str, str]] = {
+    None: {
+        "argument-literals": "r"
         + _close("think")
         + _open("response")
         + _close("response")
@@ -74,19 +76,16 @@ def kimi() -> KimiK3Codec:
                 _arg("big", "number", "1e3"),
                 _arg("meta", "object", '{"k":1,"s":"é"}'),
             )
-        ),
-        "\n  edge whitespace\n" + _close("think") + _open("response") + "  two\n\nparagraphs \n" + _close("response"),
-    ],
-    ids=["argument-literals", "edge-whitespace"],
-)
-def test_sampled_turn_re_renders_byte_identically(kimi: KimiK3Codec, sampled: str):
-    """The encoder keeps argument literals and text verbatim, so canonicalizing either
-    (2.50 → 2.5, stripping) would split the episode at this turn."""
-    prompt = [Message(role="user", content="look up H-1")]
-    prompt_text = kimi.decode(kimi.encode_messages(prompt, tools=_TOOLS, add_generation_prompt=True))
-    msg, ok = kimi.parse_response(kimi.encode(sampled + _END), tools=_TOOLS)
-    assert ok
-    assert kimi.decode(kimi.encode_messages(prompt + [msg], tools=_TOOLS)) == prompt_text + sampled + _END
+        )
+        + _END,
+        "edge-whitespace": "\n  edge whitespace\n"
+        + _close("think")
+        + _open("response")
+        + "  two\n\nparagraphs \n"
+        + _close("response")
+        + _END,
+    }
+}
 
 
 def _args(msg: Message) -> list[dict[str, object]]:
@@ -168,7 +167,7 @@ def test_sampled_shapes_parse(
     content: str | None,
     arguments: list[dict[str, object]],
 ):
-    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=_TOOLS)
+    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=KIMI_K3_TOOLS)
     assert ok
     assert (msg.get("reasoning_content"), msg.get("content")) == (reasoning, content)
     # Compared as JSON text: `True == 1` and `3 == 3.0` in Python, but not to the tool.
@@ -188,7 +187,7 @@ def test_cut_mid_reasoning_keeps_it():
 def test_endpoint_split_completion_parses():
     """Endpoint completions arrive with reasoning already split off into its own field."""
     content = _tools(_call(_arg("n", "number", "2")))
-    msg, ok = KimiK3Codec.parse_completion(content=content, reasoning="r", tools=_TOOLS)
+    msg, ok = KimiK3Codec.parse_completion(content=content, reasoning="r", tools=KIMI_K3_TOOLS)
     assert ok
     assert (msg["reasoning_content"], _args(msg)) == ("r", [{"n": 2}])
 
@@ -196,7 +195,7 @@ def test_endpoint_split_completion_parses():
 @pytest.mark.parametrize("content", [None, "", "\n"])
 def test_endpoint_reasoning_without_content_stays_reasoning(content: str | None):
     """A completion cut off while thinking has no answer: its reasoning is never graded as one."""
-    msg, ok = KimiK3Codec.parse_completion(content=content, reasoning="still thinking", tools=_TOOLS)
+    msg, ok = KimiK3Codec.parse_completion(content=content, reasoning="still thinking", tools=KIMI_K3_TOOLS)
     assert ok
     assert msg["reasoning_content"] == "still thinking"
     assert not msg.get("content", "").strip()
@@ -205,7 +204,7 @@ def test_endpoint_reasoning_without_content_stays_reasoning(content: str | None)
 
 def test_unclosed_call_fails(kimi: KimiK3Codec):
     tools_section = _open("tools") + _open("call", tool="fetch_holder", index="1") + _close("tools")
-    msg, ok = kimi.parse_response(kimi.encode(_close("think") + tools_section + _END), tools=_TOOLS)
+    msg, ok = kimi.parse_response(kimi.encode(_close("think") + tools_section + _END), tools=KIMI_K3_TOOLS)
     assert not ok
     assert "tool_calls" not in msg
 
@@ -216,21 +215,22 @@ def test_unclosed_call_fails(kimi: KimiK3Codec):
         _call(tool=""),
         _call(_open("json", type="object") + "{not json" + _close("json")),
         _call(_open("json", type="object") + "[1, 2]" + _close("json")),
+        _call(_open("json", type="object") + '{"holder_id": NaN}' + _close("json")),
         _OPEN + 'call tool=fetch_holder index="1"' + _SEP + _close("call"),
     ],
-    ids=["no-tool-name", "malformed-json", "non-object-json", "unquoted-attribute"],
+    ids=["no-tool-name", "malformed-json", "non-object-json", "non-finite-json", "unquoted-attribute"],
 )
 def test_malformed_call_is_dropped(kimi: KimiK3Codec, bad_call: str):
     """Serving drops a complete but malformed call and runs the rest; the turn is not truncated."""
     sampled = _close("think") + _tools(bad_call, _call(_arg("n", "number", "2"))) + _END
-    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=_TOOLS)
+    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=KIMI_K3_TOOLS)
     assert ok
-    assert _args(msg) == [{"n": 2}]
+    assert json.dumps(_args(msg)) == json.dumps([{"n": 2}])
 
 
 def test_call_marker_text_in_a_value_is_not_a_truncation(kimi: KimiK3Codec):
     sampled = _close("think") + _tools(_call(_arg("holder_id", "string", "see " + _OPEN + "call"))) + _END
-    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=_TOOLS)
+    msg, ok = kimi.parse_response(kimi.encode(sampled), tools=KIMI_K3_TOOLS)
     assert ok
     assert _args(msg) == [{"holder_id": "see " + _OPEN + "call"}]
 

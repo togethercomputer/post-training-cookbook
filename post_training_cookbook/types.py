@@ -26,7 +26,7 @@ class Message(TypedDict, total=False):
     content: str
     reasoning_content: str
     tool_calls: list[ToolCall]
-    tool_call_id: str
+    tool_call_id: str | None
     name: str
 
 

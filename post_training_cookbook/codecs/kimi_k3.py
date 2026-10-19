@@ -50,7 +50,9 @@ from post_training_cookbook.codecs.base import (
     load_tokenizer,
     resolve_enable_thinking,
     strip_history_reasoning,
+    with_turn_call_ids,
 )
+from post_training_cookbook.codecs.schema_coercion import parse_json
 from post_training_cookbook.types import Message, Role, ToolCall, ToolCallFunction, ToolSpec
 
 _OPEN = "<|open|>"
@@ -216,10 +218,8 @@ def _parse_turn(text: str, *, channel: str | None) -> tuple[Message, bool]:
     if reasoning_text := "".join(reasoning):
         msg["reasoning_content"] = reasoning_text
     if calls:
-        for position, call in enumerate(calls, start=1):
-            # The encoder re-derives each call's index from its position, so ids follow suit.
-            call["id"] = f"call_{position}"
-        msg["tool_calls"] = calls
+        # The encoder re-derives each call's index from its position, so ids follow suit.
+        msg["tool_calls"] = with_turn_call_ids(calls)
     return msg, ok
 
 
@@ -249,7 +249,7 @@ def _parse_arguments(body: str) -> str | None:
     if json_block is not None:
         raw = json_block.group("value")
         try:
-            parsed = json.loads(raw)
+            parsed = parse_json(raw)
         except ValueError:
             return None
         return raw if isinstance(parsed, dict) else None
@@ -270,8 +270,7 @@ def _argument_json(value: str, wire_type: str | None) -> str:
     """
     if wire_type not in (None, "string"):
         try:
-            # JSON cannot carry NaN or Infinity (nor an overflowing 1e999), which json.loads accepts.
-            json.dumps(json.loads(value), allow_nan=False)
+            parse_json(value)
         except ValueError:
             pass
         else:

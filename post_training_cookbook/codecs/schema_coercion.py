@@ -12,15 +12,26 @@ any wire format whose values arrive as strings alongside a declared schema.
 from __future__ import annotations
 
 import json
+import math
 
 from post_training_cookbook.types import ToolSpec
 
 _BOOL_LITERALS = {"true": True, "false": False, "1": True, "0": False}
 
 
+def parse_json(text: str) -> object:
+    """``json.loads`` held to JSON: ``NaN``, ``Infinity`` and an overflowing ``1e999`` raise ``ValueError``.
+
+    ``json.loads`` accepts them, even nested, but arguments built from them would not be JSON.
+    """
+    value = json.loads(text)
+    json.dumps(value, allow_nan=False)
+    return value
+
+
 def _best_effort_json(value: str) -> object:
     try:
-        return json.loads(value)
+        return parse_json(value)
     except ValueError:
         return value
 
@@ -34,9 +45,10 @@ def coerce_by_schema(value: str, declared_type: str | None) -> object:
     - any other type: ``null``/``None`` (case-insensitive) → ``None``, which keeps an
       explicit null on a nullable param (``param_types_by_tool`` types it by its non-null type)
     - ``boolean`` → ``true``/``false``/``True``/``False``/``1``/``0`` (case-insensitive)
-    - ``integer``/``number`` → ``int``/``float``
-    - ``array``/``object`` → ``json.loads``
-    - declared type absent or unknown → best-effort ``json.loads``
+    - ``integer`` → ``int``; ``number`` → ``int`` when whole, else ``float``; a non-finite number is not JSON,
+      so it stays raw
+    - ``array``/``object`` → ``parse_json``
+    - declared type absent or unknown → best-effort ``parse_json``
 
     Never raises: a value that does not fit its declared type falls back to the raw string.
     The caller is responsible for stripping any wire-format framing before passing ``value`` in.
@@ -55,10 +67,15 @@ def coerce_by_schema(value: str, declared_type: str | None) -> object:
         except ValueError:
             return value
     if declared_type == "number":
+        try:  # a whole number stays an int, as serving reads it, so `3` re-renders as `3`, not `3.0`
+            return int(value.strip())
+        except ValueError:
+            pass
         try:
-            return float(value.strip())
+            number = float(value.strip())
         except ValueError:
             return value
+        return number if math.isfinite(number) else value
     # array, object, or an absent/unknown type → best-effort JSON
     return _best_effort_json(value)
 
