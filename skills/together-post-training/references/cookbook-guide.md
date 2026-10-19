@@ -32,6 +32,7 @@ post_training_cookbook/
     glm5.py          Glm5Codec implementation
     kimi_k3.py       KimiK3Codec implementation
     minimax_m3.py    MiniMaxM3Codec implementation
+    muse_spark.py    MuseSparkCodec implementation
     qwen3_5.py       Qwen35Codec implementation (Qwen3.5, 3.6, and 3.8)
     chat_templates/  Forked Jinja templates for preserve_thinking
     __init__.py      get_codec(model_name) factory
@@ -147,7 +148,7 @@ Unknown keys in the YAML file raise `ValueError`.
 |---|---|---|---|
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. `None` uses the model's default. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template. `True` keeps `<think>` blocks in history (requires `enable_thinking != False`). `False` strips them; on GLM-5 (as `clear_thinking`), Qwen3.6 and Qwen3.8 it is forwarded to the template, and GLM-5's and Qwen3.8's keep history when the flag is omitted. See [Core concepts: codecs](./concepts.md#codecs). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`). `None` keeps the template default (max); other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
 
 #### Policy objective
 
@@ -291,7 +292,7 @@ config = SFTConfig(
 | `train_on_what` | `str` | `"all_assistant_messages"` | `"all_assistant_messages"` or `"last_assistant_message"`. Use the `TRAIN_ON_ALL` and `TRAIN_ON_LAST` constants exported from `post_training_cookbook.sft.train`; other values are rejected. |
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template; `True` keeps history reasoning; `False` strips it (see [codecs](./concepts.md#codecs)). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`). `None` keeps the template default (max); other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
 | `use_lora` | `bool` | `True` | LoRA vs full-weight. Allowed modes: [supported-models discovery](./sdk-reference.md#supported-models-and-gpu-hardware). See `recipes/sft/no_robots_full.py`. |
 | `lora_rank` | `int \| None` | `None` | LoRA rank when `use_lora=True`. `None` defers to the platform default. |
 | `lora_alpha` | `int \| None` | `None` | LoRA scaling factor when `use_lora=True`. `None` defers to the platform default. |
@@ -607,7 +608,7 @@ codec = get_codec(
     hf_token="...",
     enable_thinking=None,        # None = model default; True/False to force
     preserve_thinking=None,      # None = stock template; True keeps <think> in history
-    thinking_effort=None,        # None = template default; GLM-5 / Kimi-K3 only
+    thinking_effort=None,        # None = template default; GLM-5 / Kimi-K3 / Muse Spark only
 )
 
 # Encode raw text without chat-template wrapping
@@ -633,6 +634,7 @@ message, parse_ok = codec.parse_response(response_tokens)
 - `glm-5.3` → `Glm5Codec` (`zai-org/GLM-5.3`).
 - `kimi-k3` → `KimiK3Codec`.
 - `minimax-m3` → `MiniMaxM3Codec` (for example, `MiniMaxAI/MiniMax-M3`). Its template omits a `null` tool-call argument, so a parsed call has no such key.
+- `muse-spark-open` → `MuseSparkCodec` (`meta-models/Muse-Spark-Open-816B-A42B`). The checkpoint repo is gated on the Hugging Face Hub, so loading its tokenizer needs an `hf_token` whose account has been granted access.
 
 The registered prefixes in `post_training_cookbook/codecs/__init__.py` are the source of truth. An unrecognized model raises `ValueError`. To add a new model family, implement the `MessageCodec` protocol and register it in `post_training_cookbook/codecs/__init__.py`.
 
@@ -641,10 +643,10 @@ The `MessageCodec` protocol:
 | Method | Signature | Purpose |
 |---|---|---|
 | `encode_messages` | `(messages, *, tools=None, add_generation_prompt=False) -> list[int]` | Apply the chat template and tokenize. |
-| `parse_response` | `(response_tokens, *, tools=None) -> tuple[Message, bool]` | Decode sampled tokens into a `Message`, extracting tool calls and reasoning content. Pass the same `tools` given to `encode_messages` so each argument is parsed to its declared type (matters for formats that serialize values untyped, like the Qwen3.5 XML body; formats that carry types on the wire ignore it). The bool is `False` if a tool call was cut off (unclosed tags) or its body is missing a function name, while Kimi-K3 and MiniMax-M3 drop a complete but malformed call, as their serving parsers do. GLM-5 parses a turn cut off before `</think>` as reasoning only (`True`). |
-| `turn_terminator` | `(next_role) -> list[int]` | Tokens a trained assistant turn needs in order to stop, given what follows it. Empty for Qwen's universal `<|im_end|>`, Kimi-K3's `<|end_of_msg|>`, and MiniMax-M3's `[e~[`, which the template writes inside the turn; the next role's marker for GLM-5 (`<|user|>`, `<|observation|>`, or `<|endoftext|>` at the end of the conversation). Raises `ValueError` when the family declares no stop token for that continuation. |
+| `parse_response` | `(response_tokens, *, tools=None) -> tuple[Message, bool]` | Decode sampled tokens into a `Message`, extracting tool calls and reasoning content. Pass the same `tools` given to `encode_messages` so each argument is parsed to its declared type (matters for formats that serialize values untyped, like the Qwen3.5 XML body; formats that carry types on the wire ignore it). The bool is `False` if a tool call was cut off (unclosed tags) or its body is missing a function name, while Kimi-K3 and MiniMax-M3 drop a complete but malformed call, as their serving parsers do. Muse Spark also drops malformed calls, but returns `False` for malformed channel headers or structure as well as cut-off turns. GLM-5 parses a turn cut off before `</think>` as reasoning only (`True`). |
+| `turn_terminator` | `(next_role) -> list[int]` | Tokens a trained assistant turn needs in order to stop, given what follows it. Empty for Qwen's universal `<|im_end|>`, Kimi-K3's `<|end_of_msg|>`, MiniMax-M3's `[e~[`, and Muse Spark's `<|eot|>`, which the template writes inside the turn (a reasoning-only Muse Spark turn has none, so it is refused as the last message); the next role's marker for GLM-5 (`<|user|>`, `<|observation|>`, or `<|endoftext|>` at the end of the conversation). Raises `ValueError` when the family declares no stop token for that continuation. |
 | `encode` | `(text) -> list[int]` | Tokenize raw text without chat-template wrapping. |
-| `decode` | `(tokens) -> str` | Decode tokens, skipping special tokens other than the markers the family's parser needs (Kimi-K3 decodes verbatim). |
+| `decode` | `(tokens) -> str` | Decode tokens, skipping special tokens other than the markers the family's parser needs (Kimi-K3 decodes verbatim; Muse Spark's markers are all special, so its `parse_response` decodes verbatim itself). |
 
 ### Conversation rendering with loss masks
 
@@ -677,7 +679,7 @@ sequences = render_conversation(
 | `"all_assistant_messages"` (`TRAIN_ON_ALL`) | Loss mask = 1 for every assistant turn. |
 | `"last_assistant_message"` (`TRAIN_ON_LAST`) | Loss mask = 1 only for the final assistant turn. |
 
-`render_conversation` returns a **list** because a conversation may not encode prefix-stably in a single pass — chat templates that strip `<think>` blocks from history mean a later turn's render no longer extends an earlier one's. `split_turns` (in `post_training_cookbook.sequence_split`) breaks the conversation into one sequence per prefix-stable run, so each turn trains against the history the model actually sees at inference. With `preserve_thinking=True` the history-preserving template (native for GLM-5, a fork for Qwen) keeps thinking in history, usually collapsing to a single sequence. `render_conversation` raises `ValueError` if the codec rewrites the assistant prompt within a single turn (a contract violation, distinct from history stripping), or if the codec has no stop token for what follows a trained turn (GLM-5 rejects back-to-back assistant turns — merge, split, or drop them).
+`render_conversation` returns a **list** because a conversation may not encode prefix-stably in a single pass — chat templates that strip `<think>` blocks from history mean a later turn's render no longer extends an earlier one's. `split_turns` (in `post_training_cookbook.sequence_split`) breaks the conversation into one sequence per prefix-stable run, so each turn trains against the history the model actually sees at inference. With `preserve_thinking=True` the history-preserving template (native for GLM-5, a fork for Qwen) keeps thinking in history, usually collapsing to a single sequence. `render_conversation` raises `ValueError` if the codec rewrites the assistant prompt within a single turn (a contract violation, distinct from history stripping), or if the codec has no stop token for what follows a trained turn (GLM-5 rejects back-to-back assistant turns, and Muse Spark a reasoning-only turn — merge, split, or drop them).
 
 ---
 

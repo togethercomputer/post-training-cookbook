@@ -233,12 +233,7 @@ def _value(raw: str, schema: object) -> object:
     if _NS not in raw or declared not in (None, "array", "object"):
         if not raw and declared in ("array", "object"):
             return [] if declared == "array" else {}
-        typed = coerce_by_schema(raw, declared)
-        try:  # JSON cannot carry NaN or Infinity, which float() and json.loads accept, even nested.
-            json.dumps(typed, allow_nan=False)
-        except ValueError:
-            return raw
-        return typed
+        return coerce_by_schema(raw, declared)
     children = _elements(raw)
     branch = non_null_branch(spec)
     if declared == "array" or (declared is None and all(tag == "item" for tag, _ in children)):

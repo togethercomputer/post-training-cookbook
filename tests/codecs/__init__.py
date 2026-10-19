@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import itertools
 
+import pytest
+from huggingface_hub.errors import GatedRepoError
+
+from post_training_cookbook.codecs import get_codec
 from post_training_cookbook.codecs.base import MessageCodec
 from post_training_cookbook.codecs.schema_coercion import param_types_by_tool
 from post_training_cookbook.sequence_split import TrainableSequence
@@ -25,10 +29,11 @@ REFERENCE_MODELS: dict[str, str] = {
     "glm-5": "zai-org/GLM-5.3",
     "kimi-k3": "moonshotai/Kimi-K3",
     "minimax-m3": "MiniMaxAI/MiniMax-M3",
+    "muse-spark": "meta-models/Muse-Spark-Open-816B-A42B",
 }
 
-# GLM-5.3's template has no thinking-off mode, so its codec rejects enable_thinking=False.
-THINKING_OFF_MODELS = [model for family, model in REFERENCE_MODELS.items() if family != "glm-5"]
+# GLM-5.3's and Muse Spark's templates have no thinking-off mode, so their codecs reject it.
+THINKING_OFF_MODELS = [model for family, model in REFERENCE_MODELS.items() if family not in ("glm-5", "muse-spark")]
 
 # Shared by the format-specific arg-parser suites, so every parser is provably
 # tested against the identical declared schema.
@@ -59,6 +64,22 @@ TWO_TURN_CONVERSATION: list[Message] = [
     Message(role="user", content="u2"),
     Message(role="assistant", content="a2"),
 ]
+
+
+# Gated reference repos this environment's HF token cannot open, so each is only tried once.
+_inaccessible_models: set[str] = set()
+
+
+def load_reference_codec(model: str, **kwargs) -> MessageCodec:
+    """`get_codec`, skipping the calling test when the model's Hub repo is gated and not open to this token."""
+    if model not in _inaccessible_models:
+        try:
+            return get_codec(model, **kwargs)
+        except OSError as error:
+            if not isinstance(error, GatedRepoError) and not isinstance(error.__cause__, GatedRepoError):
+                raise
+            _inaccessible_models.add(model)
+    pytest.skip(f"{model} is gated on the Hub; set HF_TOKEN for an account with access")
 
 
 def single_token(codec: MessageCodec, text: str) -> int:

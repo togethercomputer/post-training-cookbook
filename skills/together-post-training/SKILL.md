@@ -360,13 +360,13 @@ Caveats: use a more conservative LR than a comparable LoRA run (compare `recipes
 
 GRPO/SFT configs (and `get_codec`) take three thinking options:
 
-- `enable_thinking` — on/off for the model's `<think>` output (`None` = model default; adaptive on MiniMax-M3; GLM-5 always thinks and rejects `False`).
-- `preserve_thinking` — when `True`, render history with a template that keeps `<think>` blocks across turns — natively for GLM-5, Qwen3.6 and Qwen3.8, via a forked template for Qwen3.5 (requires `enable_thinking != False`). When `None` (default), the stock template decides: Qwen3.5/3.6 strip thinking and the conversation is split into prefix-stable sequences, while GLM-5's and Qwen3.8's keep it. `False` strips it. Kimi-K3 and MiniMax-M3 render history reasoning by default, so there the default and `True` render identically and `False` strips it before rendering. Only preserve thinking if inference also preserves it. See `references/concepts.md` (codecs).
-- `thinking_effort` — `low`/`high`/`max` for GLM-5 and Kimi-K3; `None` keeps the template default (max). Other families reject any value.
+- `enable_thinking` — on/off for the model's `<think>` output (`None` = model default; adaptive on MiniMax-M3; GLM-5 and Muse Spark always think and reject `False`).
+- `preserve_thinking` — when `True`, render history with a template that keeps `<think>` blocks across turns — natively for GLM-5, Qwen3.6 and Qwen3.8, via a forked template for Qwen3.5 (requires `enable_thinking != False`). When `None` (default), the stock template decides: Qwen3.5/3.6 strip thinking and the conversation is split into prefix-stable sequences, while GLM-5's and Qwen3.8's keep it. `False` strips it. Kimi-K3, MiniMax-M3 and Muse Spark render history reasoning by default, so there the default and `True` render identically and `False` strips it before rendering. Only preserve thinking if inference also preserves it. See `references/concepts.md` (codecs).
+- `thinking_effort` — `low`/`high`/`max` for GLM-5 and Kimi-K3 (default `max`), `low`/`medium`/`high`/`xhigh` for Muse Spark (default `xhigh`); `None` keeps the template default. Other families reject any value.
 
-The codec is resolved from the model name by longest matching prefix: `qwen3.5` / `qwen3.6` / `qwen3.8` → `Qwen35Codec`, `glm-5.3` → `Glm5Codec`, `kimi-k3` → `KimiK3Codec`, `minimax-m3` → `MiniMaxM3Codec`.
+The codec is resolved from the model name by longest matching prefix: `qwen3.5` / `qwen3.6` / `qwen3.8` → `Qwen35Codec`, `glm-5.3` → `Glm5Codec`, `kimi-k3` → `KimiK3Codec`, `minimax-m3` → `MiniMaxM3Codec`, `muse-spark-open` → `MuseSparkCodec`.
 
-At the default, GLM-5 and Kimi-K3 runs need a generous `max_sample_tokens` (or, on Kimi-K3, `enable_thinking=False`); otherwise rollouts truncate mid-reasoning.
+At the default, GLM-5, Kimi-K3 and Muse Spark runs need a generous `max_sample_tokens` (or, on Kimi-K3, `enable_thinking=False`); otherwise rollouts truncate mid-reasoning.
 
 ### Multi-LoRA: many adapters on one base model
 
@@ -591,7 +591,7 @@ post_training_cookbook/
   datasets/registry.py    DatasetConfig, DATASETS dict, loading helpers
   datasets/rewards.py     gsm8k / game24 rewards
   datasets/math_grader.py boxed_math_reward (deepmath)
-  codecs/                 get_codec, Qwen3.5/GLM-5/Kimi-K3/MiniMax-M3 codecs, chat templates
+  codecs/                 get_codec, Qwen3.5/GLM-5/Kimi-K3/MiniMax-M3/Muse Spark codecs, chat templates
   envs/                   Env ABC, Task, step_env, tool_use_game reference env
   custom_loss.py          compute_logprobs, compute_custom_forward_backward
   multi_lora.py           training_session: attach to a shared model resource or provision

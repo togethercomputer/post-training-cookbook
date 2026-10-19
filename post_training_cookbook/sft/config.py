@@ -33,7 +33,8 @@ class SFTConfig:
     # See post_training_cookbook.codecs.base for the preserve_thinking vs default-split trade-off.
     enable_thinking: bool | None = None
     preserve_thinking: bool | None = None
-    # Family-specific reasoning budget (Kimi-K3, GLM-5: low/high/max); None = template default.
+    # Family-specific reasoning budget (Kimi-K3, GLM-5: low/high/max; Muse Spark: low/medium/high/xhigh);
+    # None = template default.
     thinking_effort: str | None = None
     wandb_project: str | None = None
     wandb_entity: str | None = None
