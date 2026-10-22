@@ -8,8 +8,8 @@ dependencies = [
     "numpy~=2.4",
     "python-dotenv~=1.2",
     "wandb~=0.25",
-    "datasets~=4.8",
-    "transformers~=5.0",
+    "datasets>=5.0.1,<6",
+    "transformers>=5.10.0,<6",
     "jinja2~=3.1",
     "pyyaml~=6.0",
     "matplotlib~=3.10",
@@ -26,6 +26,10 @@ build-backend = "hatchling.build"
 dev = ["pytest", "pytest-asyncio", "ruff==0.14.9", "pre-commit"]
 notebooks = ["ipykernel~=6.30"]
 tinker = ["tinker-cookbook[math-rl]", "together[tinker]"]
+
+[tool.uv]
+# tinker-cookbook caps transformers<=5.5.4; override to pick up security fixes (GHSA-xrqw-3rrv-vx5w).
+override-dependencies = ["transformers>=5.10.0,<6"]
 
 [tool.uv.sources]
 # Pinned SDK revision providing `together.post_training`.
