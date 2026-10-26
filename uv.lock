@@ -2503,7 +2503,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = "~=1.2" },
     { name = "pyyaml", specifier = "~=6.0" },
     { name = "tiktoken", specifier = "~=0.14" },
-    { name = "together", git = "https://github.com/togethercomputer/together-py.git?rev=v2.41.0" },
+    { name = "together", specifier = ">=3.0.0,<4" },
     { name = "torch", specifier = "~=2.13" },
     { name = "transformers", specifier = ">=5.10.0,<6" },
     { name = "wandb", specifier = "~=0.25" },
@@ -2519,7 +2519,7 @@ dev = [
 notebooks = [{ name = "ipykernel", specifier = "~=6.30" }]
 tinker = [
     { name = "tinker-cookbook", extras = ["math-rl"] },
-    { name = "together", extras = ["tinker"], git = "https://github.com/togethercomputer/together-py.git?rev=v2.41.0" },
+    { name = "together", extras = ["tinker"] },
 ]
 
 [[package]]
@@ -3632,8 +3632,8 @@ wheels = [
 
 [[package]]
 name = "together"
-version = "2.41.0"
-source = { git = "https://github.com/togethercomputer/together-py.git?rev=v2.41.0#e160ea5553d10c8cd4afe9bc63a1b1936b38b925" }
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "cyclopts" },
@@ -3646,6 +3646,10 @@ dependencies = [
     { name = "sniffio" },
     { name = "types-pyyaml" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/7b/4c8dd7481e0c536e689c310bc217687d9b94457fe14946bb84cb1242723d/together-3.0.0.tar.gz", hash = "sha256:622c28b577f8f6e5af2b08d98a660de54f2f256ff425214fa6f7fb5eb1698809", size = 1143040, upload-time = "2026-10-22T18:33:03.431Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/20/f796ce992cf7cbcadc3773c44db9ee3e0cd5d3655cd3562abed0b8be66fb/together-3.0.0-py3-none-any.whl", hash = "sha256:13458c58200fb10034bfe7463a95c0a99b9dcedb592e9ebc16e3e708f402066b", size = 929509, upload-time = "2026-10-22T18:33:02.009Z" },
 ]
 
 [package.optional-dependencies]

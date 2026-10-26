@@ -15,7 +15,7 @@ dependencies = [
     "matplotlib~=3.10",
     "torch~=2.13",
     "tiktoken~=0.14",  # Kimi-K3 checkpoint tokenizer (trust_remote_code)
-    "together",
+    "together>=3.0.0,<4",  # Capped: a new SDK major can remove modules the cookbook imports
 ]
 
 [build-system]
@@ -30,10 +30,6 @@ tinker = ["tinker-cookbook[math-rl]", "together[tinker]"]
 [tool.uv]
 # tinker-cookbook caps transformers<=5.5.4; override to pick up security fixes (GHSA-xrqw-3rrv-vx5w).
 override-dependencies = ["transformers>=5.10.0,<6"]
-
-[tool.uv.sources]
-# Pinned SDK revision providing `together.post_training`.
-together = { git = "https://github.com/togethercomputer/together-py.git", rev = "v2.41.0" }
 
 [tool.ruff]
 line-length = 119

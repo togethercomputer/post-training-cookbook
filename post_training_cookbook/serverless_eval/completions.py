@@ -14,7 +14,7 @@ from post_training_cookbook.types import Message, ToolCall, ToolCallFunction, To
 
 if TYPE_CHECKING:
     from together import AsyncTogether
-    from together.types.chat.chat_completion import ChoiceMessage
+    from together.types.chat.chat_completion_message import ChatCompletionMessage
 
 
 def _to_tools_param(tools: list[ToolSpec]) -> list[dict[str, Any]]:
@@ -97,7 +97,7 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
     return api_messages
 
 
-def _endpoint_message(choice: ChoiceMessage) -> Message:
+def _endpoint_message(choice: ChatCompletionMessage) -> Message:
     message = Message(role="assistant")
     if choice.content is not None:
         message["content"] = choice.content
@@ -114,7 +114,7 @@ def _endpoint_message(choice: ChoiceMessage) -> Message:
     return message
 
 
-def _recovered_message(choice: ChoiceMessage, tools: list[ToolSpec], model: str) -> Message | None:
+def _recovered_message(choice: ChatCompletionMessage, tools: list[ToolSpec], model: str) -> Message | None:
     try:
         parsed, _ = parse_completion(
             model,
@@ -128,13 +128,13 @@ def _recovered_message(choice: ChoiceMessage, tools: list[ToolSpec], model: str)
 
 
 def _response_to_message(
-    choice: ChoiceMessage,
+    choice: ChatCompletionMessage,
     tools: list[ToolSpec],
     model: str,
     *,
     append_unparsed_tool_calls: bool = False,
 ) -> Message:
-    """Build our assistant Message from an endpoint's ``ChoiceMessage``.
+    """Build our assistant Message from an endpoint's ``ChatCompletionMessage``.
 
     Structured ``tool_calls`` win by default. Pass ``append_unparsed_tool_calls``
     to also recover leaked ``<tool_call>`` blocks and append them.

@@ -29,7 +29,7 @@ from typing import Any, NamedTuple
 
 import wandb
 import yaml
-from together.error import APIError
+from together import APIError
 from together.post_training import SessionClient
 
 logger = logging.getLogger(__name__)
