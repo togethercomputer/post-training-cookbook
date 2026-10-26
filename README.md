@@ -96,15 +96,15 @@ Each inference checkpoint registers its weights in the model registry. Serve the
 
 ```bash
 # Production: one adapter, merged into the base model when each replica starts
-tg beta endpoints deploy <adapter_id> --endpoint my-rl-model --merge --config <config_id> --project <project_id>
+tg endpoints deploy <adapter_id> --endpoint my-rl-model --merge --config <config_id> --project <project_id>
 
 # Comparison: attach several adapters to one multi-LoRA deployment, pick one per request
-tg beta endpoints deploy <adapter_id> --endpoint my-sweep --attach-adapter
+tg endpoints deploy <adapter_id> --endpoint my-sweep --attach-adapter
 
 # FP4-served base models: if `estimate` accepts the adapter, prepare it, then deploy the prepared model
 tg training fp4 estimate <adapter_id>          # price and expected hours; creates nothing
 tg training fp4 create <adapter_id> --watch    # prints the prepared model ID when it completes
-tg beta endpoints deploy <prepared_model_id> --endpoint my-fp4-model --config <config_id> --project <project_id>
+tg endpoints deploy <prepared_model_id> --endpoint my-fp4-model --config <config_id> --project <project_id>
 ```
 
 `<adapter_id>` is `ckpt.registration.adapter.id`. For configs, the SDK flow, and FP4 preparation, see:

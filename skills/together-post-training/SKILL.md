@@ -464,16 +464,16 @@ Inference checkpoints are for serving and download. They do not seed new trainin
 
 Three paths for a LoRA checkpoint (`registration.adapter`). The CLI commands need together-py 3.0+.
 
-Choose the path from what the platform reports, not from a list of models. The adapter's base model is `client.beta.models.retrieve(adapter_id).base_model_id`.
+Choose the path from what the platform reports, not from a list of models. The adapter's base model is `client.models.retrieve(adapter_id).base_model_id`.
 
 1. Run `tg training fp4 estimate <adapter_id>`. If it returns a price, the base model serves in FP4: [prepare the adapter](#prepare-an-adapter-for-fp4-inference) and deploy the prepared model. If it reports that the base model isn't supported, deploy the adapter with `--merge`.
-2. To compare candidates first, run `tg beta models configs <base_model_id>`. A config whose `adapter_mode` is `dynamic` means the base model supports multi-LoRA deployment.
+2. To compare candidates first, run `tg models configs <base_model_id>`. A config whose `adapter_mode` is `dynamic` means the base model supports multi-LoRA deployment.
 
-- **Production, one adapter:** `tg beta endpoints deploy <adapter_id> --endpoint <name> --merge --config <config_id> --project <project_id>`, with a config of the base model whose `adapter_mode` is `disabled`. Replicas merge the adapter at startup. Guide: https://docs.together.ai/docs/post-training/deployment
-- **Compare candidates:** `tg beta endpoints deploy <adapter_id> --endpoint <name> --attach-adapter [--config <config_id>]` per adapter, with a config whose `adapter_mode` is `dynamic`; call `model="<project_slug>/<endpoint>:<adapter_id>"` on `https://api-inference.together.ai/v1`. `deploy` fails with "No fixed or dynamic LoRA config found" when the base model has none. Guide: https://docs.together.ai/docs/post-training/multi-lora-deployment
+- **Production, one adapter:** `tg endpoints deploy <adapter_id> --endpoint <name> --merge --config <config_id> --project <project_id>`, with a config of the base model whose `adapter_mode` is `disabled`. Replicas merge the adapter at startup. Guide: https://docs.together.ai/docs/post-training/deployment
+- **Compare candidates:** `tg endpoints deploy <adapter_id> --endpoint <name> --attach-adapter [--config <config_id>]` per adapter, with a config whose `adapter_mode` is `dynamic`; call `model="<project_slug>/<endpoint>:<adapter_id>"` on `https://api-inference.together.ai/v1`. `deploy` fails with "No fixed or dynamic LoRA config found" when the base model has none. Guide: https://docs.together.ai/docs/post-training/multi-lora-deployment
 - **FP4 preparation:** `tg training fp4 estimate|create <adapter_id> [--calibration-file f.jsonl] --watch` (or `scripts/prepare_for_fp4.py`), then deploy the prepared model without `--merge`. See [Prepare an adapter for FP4 inference](#prepare-an-adapter-for-fp4-inference). Guide: https://docs.together.ai/docs/post-training/prepare-for-fp4-inference
 
-Full-weight checkpoints (`registration.model`) and FP4-prepared models are merged models: deploy them directly, without `--merge`, on a config whose `adapter_mode` is `disabled` (`tg beta models configs <model_id>`). Always pass `--project`: without it the CLI resolves a private model to its base model and deploys the base.
+Full-weight checkpoints (`registration.model`) and FP4-prepared models are merged models: deploy them directly, without `--merge`, on a config whose `adapter_mode` is `disabled` (`tg models configs <model_id>`). Always pass `--project`: without it the CLI resolves a private model to its base model and deploys the base.
 
 The SDK flow below matches `--merge`; `scripts/deploy_checkpoint.py` wraps it.
 
@@ -485,13 +485,13 @@ client = Together()
 ckpt = session.retrieve().inference_checkpoints[-1]
 artifact = ckpt.registration.adapter or ckpt.registration.model
 
-model = client.beta.models.retrieve(artifact.id)
-# Use a config whose adapter_mode is disabled (`tg beta models configs <base_model_id>`), not a multi-LoRA one.
-configs = client.beta.models.configs.list(reference_model_id=model.base_model_id or model.id).data
+model = client.models.retrieve(artifact.id)
+# Use a config whose adapter_mode is disabled (`tg models configs <base_model_id>`), not a multi-LoRA one.
+configs = client.models.configs.list(reference_model_id=model.base_model_id or model.id).data
 config = next(c for c in configs if c.id == "<config_id>")
 
-endpoint = client.beta.endpoints.create(name="my-rl-model")
-deployment = client.beta.endpoints.deployments.create(
+endpoint = client.endpoints.create(name="my-rl-model")
+deployment = client.endpoints.deployments.create(
     endpoint.id,
     name="my-rl-model-v1",
     model=f"projects/{model.project_id}/models/{model.id}/revisions/{artifact.revision_id}",
@@ -499,7 +499,7 @@ deployment = client.beta.endpoints.deployments.create(
     autoscaling={"min_replicas": 1, "max_replicas": 1},
     inactive_timeout=30,
 )
-client.beta.endpoints.update(
+client.endpoints.update(
     endpoint.id,
     traffic_split=[{"deployment_id": deployment.id, "weight": 1.0}],
     update_mask="trafficSplit",
@@ -507,7 +507,7 @@ client.beta.endpoints.update(
 
 while deployment.status.state != "DEPLOYMENT_STATE_READY":
     time.sleep(15)
-    deployment = client.beta.endpoints.deployments.retrieve(deployment.id, endpoint_id=endpoint.id)
+    deployment = client.endpoints.deployments.retrieve(deployment.id, endpoint_id=endpoint.id)
 
 # Routing can lag READY by a minute or two: retry on 404 or 503.
 response = client.chat.completions.create(
@@ -555,8 +555,8 @@ print(job.status, job.results.api_model_object_id if job.status == "completed" e
 The prepared model is a merged model, already validated for deployment. Deploy it without `--merge`, on a config whose `adapter_mode` is `disabled`, and pass `--project`:
 
 ```bash
-tg beta models configs <prepared_model_id>
-tg beta endpoints deploy <prepared_model_id> --endpoint my-fp4-model --config <config_id> --project <project_id>
+tg models configs <prepared_model_id>
+tg endpoints deploy <prepared_model_id> --endpoint my-fp4-model --config <config_id> --project <project_id>
 ```
 
 The prepared model registers against the base model that serves it in FP4, which can differ from the adapter's base, so list the configs of the prepared model, not of the adapter's base.
