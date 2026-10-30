@@ -29,7 +29,8 @@ tinker = ["tinker-cookbook[math-rl]", "together[tinker]"]
 
 [tool.uv]
 # tinker-cookbook caps transformers<=5.5.4; override to pick up security fixes (GHSA-xrqw-3rrv-vx5w).
-override-dependencies = ["transformers>=5.10.0,<6"]
+# together caps filelock<4, and every 3.x release is affected by GHSA-v4x8-3wr5-3wq8; it only uses FileLock, unchanged in 4.x.
+override-dependencies = ["transformers>=5.10.0,<6", "filelock>=4.2.1,<5"]
 
 [tool.ruff]
 line-length = 119
