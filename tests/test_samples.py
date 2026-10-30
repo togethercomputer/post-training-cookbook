@@ -7,8 +7,8 @@ that only checks lengths, or only checks ``target_tokens``.
 """
 
 import pytest
-from together.lib.post_training._losses import INPUT_DTYPES
 from together.post_training import Sample
+from together.post_training._losses import INPUT_DTYPES
 
 from post_training_cookbook.grpo.samples import build_policy_sample
 from post_training_cookbook.samples import (

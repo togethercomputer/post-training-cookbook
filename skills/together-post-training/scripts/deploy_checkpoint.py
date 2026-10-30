@@ -16,7 +16,7 @@ This script:
   4. Waits for the deployment to become ready
   5. Sends a test chat completion and prints the endpoint name
 
-Requires: TOGETHER_API_KEY environment variable
+Requires: TOGETHER_API_KEY and TOGETHER_PROJECT_ID environment variables
 """
 
 from __future__ import annotations
@@ -51,8 +51,8 @@ def main() -> None:
     client = Together()
 
     # ---- Pick a serving config ----
-    model = client.beta.models.retrieve(args.model_id)
-    configs = client.beta.models.configs.list(reference_model_id=model.base_model_id or model.id).data or []
+    model = client.models.retrieve(args.model_id)
+    configs = client.models.configs.list(reference_model_id=model.base_model_id or model.id).data or []
     if args.config is not None:
         configs = [c for c in configs if c.id == args.config]
     if len(configs) != 1:
@@ -63,8 +63,8 @@ def main() -> None:
 
     # ---- Create endpoint and deployment ----
     endpoint_name = args.endpoint_name or f"rl-{args.model_id.lower().replace('_', '-')}"
-    endpoint = client.beta.endpoints.create(name=endpoint_name)
-    deployment = client.beta.endpoints.deployments.create(
+    endpoint = client.endpoints.create(name=endpoint_name)
+    deployment = client.endpoints.deployments.create(
         endpoint.id,
         name=f"{endpoint_name}-{args.revision_id.lower().replace('_', '-')}",
         model=f"projects/{model.project_id}/models/{model.id}/revisions/{args.revision_id}",
@@ -72,7 +72,7 @@ def main() -> None:
         autoscaling={"min_replicas": 1, "max_replicas": 1},
         inactive_timeout=args.inactive_timeout,
     )
-    client.beta.endpoints.update(
+    client.endpoints.update(
         endpoint.id,
         traffic_split=[{"deployment_id": deployment.id, "weight": 1.0}],
         update_mask="trafficSplit",
@@ -89,7 +89,7 @@ def main() -> None:
             print(f"ERROR: deployment not ready within {args.timeout}s", file=sys.stderr)
             sys.exit(1)
         time.sleep(15)
-        deployment = client.beta.endpoints.deployments.retrieve(deployment.id, endpoint_id=endpoint.id)
+        deployment = client.endpoints.deployments.retrieve(deployment.id, endpoint_id=endpoint.id)
         print(f"  state: {deployment.status.state}")
 
     # ---- Test inference ----
@@ -112,7 +112,7 @@ def main() -> None:
     print("\n--- Summary ---")
     print(f"  Checkpoint: {args.model_id}@{args.revision_id}")
     print(f"  Endpoint:   {endpoint.name}")
-    print(f"\nTo delete: tg beta endpoints rm {endpoint.id}")
+    print(f"\nTo delete: tg endpoints rm {endpoint.id}")
 
 
 if __name__ == "__main__":

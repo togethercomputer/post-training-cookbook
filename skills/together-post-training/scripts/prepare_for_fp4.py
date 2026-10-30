@@ -15,7 +15,7 @@ This script:
   4. Prints the prepared model ID and the command to deploy it
 
 An adapter whose base model isn't served in FP4 is rejected at the estimate: deploy it with
-`tg beta endpoints deploy <adapter_id> --merge` instead.
+`tg endpoints deploy <adapter_id> --merge` instead.
 
 Requires: TOGETHER_API_KEY for the project that owns the adapter
 """
@@ -79,8 +79,8 @@ def main() -> None:
     model_id = job.results.api_model_object_id
     print(f"Prepared model: {model_id} (revision {job.results.api_model_revision_id})")
     print("Deploy it with a config whose adapter_mode is disabled:")
-    print(f"  tg beta models configs {model_id}")
-    print(f"  tg beta endpoints deploy {model_id} --endpoint <name> --config <config_id> --project <project_id>")
+    print(f"  tg models configs {model_id}")
+    print(f"  tg endpoints deploy {model_id} --endpoint <name> --config <config_id> --project <project_id>")
 
 
 if __name__ == "__main__":
