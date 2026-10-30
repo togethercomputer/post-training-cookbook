@@ -16,7 +16,7 @@ This script:
   4. Waits for the deployment to become ready
   5. Sends a test chat completion and prints the endpoint name
 
-Requires: TOGETHER_API_KEY environment variable
+Requires: TOGETHER_API_KEY and TOGETHER_PROJECT_ID environment variables
 """
 
 from __future__ import annotations

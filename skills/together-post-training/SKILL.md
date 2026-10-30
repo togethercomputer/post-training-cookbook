@@ -475,7 +475,7 @@ Choose the path from what the platform reports, not from a list of models. The a
 
 Full-weight checkpoints (`registration.model`) and FP4-prepared models are merged models: deploy them directly, without `--merge`, on a config whose `adapter_mode` is `disabled` (`tg models configs <model_id>`). Always pass `--project`: without it the CLI resolves a private model to its base model and deploys the base.
 
-The SDK flow below matches `--merge`; `scripts/deploy_checkpoint.py` wraps it.
+The SDK flow below matches `--merge`; `scripts/deploy_checkpoint.py` wraps it. Both need `TOGETHER_PROJECT_ID` (or `Together(project_id=...)`) for `client.models` / `client.endpoints`.
 
 ```python
 import time
