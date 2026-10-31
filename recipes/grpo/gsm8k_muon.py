@@ -1,7 +1,7 @@
 """GRPO on GSM8K with the Muon optimizer — edit config values below and run.
 
 Muon (``optimizer="muon"``) requires full-weight training (``use_lora=False``).
-See https://docs.together.ai/docs/post-training/sdk-reference#muon-optimizer for what it does and how it is tuned.
+See https://docs.together.ai/docs/post-training/cookbook#optimizer for its settings.
 """
 
 from post_training_cookbook.grpo.config import GRPOConfig
