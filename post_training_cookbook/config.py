@@ -122,7 +122,7 @@ def optim_step_params(config: GRPOConfig, learning_rate: float) -> dict[str, Any
 
     Returns ``{"adam_params": ...}``, or for Muon ``{"muon_params": ...}`` with a
     nested AdamW group for the parameters Muon does not tune; both groups share the
-    step's ``learning_rate``. See https://docs.together.ai/docs/post-training/sdk-reference#muon-optimizer.
+    step's ``learning_rate``. See https://docs.together.ai/docs/post-training/cookbook#optimizer.
     """
     adam = AdamParams(
         beta1=config.adam_beta1,
