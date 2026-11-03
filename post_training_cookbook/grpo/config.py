@@ -198,7 +198,7 @@ class GRPOConfig:
     weight_decay: float = 0.01
 
     # Muon requires full-weight training (use_lora=False); unset knobs defer to
-    # the server. See https://docs.together.ai/docs/post-training/sdk-reference#muon-optimizer for what Muon tunes.
+    # the server. See https://docs.together.ai/docs/post-training/cookbook#optimizer for what Muon tunes.
     optimizer: Literal["adam", "muon"] = "adam"
     muon_scaling_strategy: MuonScalingStrategy | None = None
     muon_momentum: float | None = None

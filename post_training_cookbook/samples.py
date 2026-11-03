@@ -12,9 +12,9 @@ loss array is ``arr[1:]``, all off the same flat run.
 The builders own that trim. Their *inputs* are all in token space, unshifted and
 length N, and ``target_tokens`` is derived rather than accepted.
 
-``https://docs.together.ai/docs/post-training/sdk-reference`` documents the wire format, and under "If you build by
-hand" tabulates what a mis-trim of each array costs and whether anything
-observable moves.
+``https://docs.together.ai/docs/post-training/concepts#data-and-samples`` documents the
+layout, and why an array trimmed from the wrong end trains on the wrong tokens
+without an error.
 """
 
 from __future__ import annotations
