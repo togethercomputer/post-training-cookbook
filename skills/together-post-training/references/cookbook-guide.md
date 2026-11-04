@@ -30,7 +30,7 @@ post_training_cookbook/
   codecs/            Model-specific tokenization
     base.py          MessageCodec protocol, preserve_thinking handling
     glm5.py          Glm5Codec implementation
-    kimi_k3.py       KimiK3Codec implementation
+    kimi_k3.py       KimiK3Codec and KimiK31Codec implementation
     minimax_m3.py    MiniMaxM3Codec implementation
     muse_spark.py    MuseSparkCodec implementation
     qwen3_5.py       Qwen35Codec implementation (Qwen3.5, 3.6, and 3.8)
@@ -148,7 +148,7 @@ Unknown keys in the YAML file raise `ValueError`.
 |---|---|---|---|
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. `None` uses the model's default. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template. `True` keeps `<think>` blocks in history (requires `enable_thinking != False`). `False` strips them; on GLM-5 (as `clear_thinking`), Qwen3.6 and Qwen3.8 it is forwarded to the template, and GLM-5's and Qwen3.8's keep history when the flag is omitted. See [Core concepts: codecs](./concepts.md#codecs). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5, Kimi-K3 and Kimi-K3.1 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
 
 #### Policy objective
 
@@ -292,7 +292,7 @@ config = SFTConfig(
 | `train_on_what` | `str` | `"all_assistant_messages"` | `"all_assistant_messages"` or `"last_assistant_message"`. Use the `TRAIN_ON_ALL` and `TRAIN_ON_LAST` constants exported from `post_training_cookbook.sft.train`; other values are rejected. |
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template; `True` keeps history reasoning; `False` strips it (see [codecs](./concepts.md#codecs)). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5, Kimi-K3 and Kimi-K3.1 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
 | `use_lora` | `bool` | `True` | LoRA vs full-weight. Allowed modes: [supported-models discovery](./sdk-reference.md#supported-models-and-gpu-hardware). See `recipes/sft/no_robots_full.py`. |
 | `lora_rank` | `int \| None` | `None` | LoRA rank when `use_lora=True`. `None` defers to the platform default. |
 | `lora_alpha` | `int \| None` | `None` | LoRA scaling factor when `use_lora=True`. `None` defers to the platform default. |
@@ -608,7 +608,7 @@ codec = get_codec(
     hf_token="...",
     enable_thinking=None,        # None = model default; True/False to force
     preserve_thinking=None,      # None = stock template; True keeps <think> in history
-    thinking_effort=None,        # None = template default; GLM-5 / Kimi-K3 / Muse Spark only
+    thinking_effort=None,        # None = template default; GLM-5 / Kimi-K3 / Kimi-K3.1 / Muse Spark only
 )
 
 # Encode raw text without chat-template wrapping

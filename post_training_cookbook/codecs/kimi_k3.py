@@ -36,6 +36,9 @@ writes message text with control tokens disallowed. Decoded text cannot tell a s
 one the model spelled out, though, so parsing follows the channel grammar: inside ``think`` only its
 own close or the end of the message is a transition, so anything written in an open ``think`` is
 reasoning; inside ``response`` a ``tools`` open is one too.
+
+Kimi-K3.1 (``KimiK31Codec``) has the same format, tokenizer and parser, and renders through the same
+encoder under a pin of its own.
 """
 
 from __future__ import annotations
@@ -60,12 +63,6 @@ _CLOSE = "<|close|>"
 _SEP = "<|sep|>"
 _END_OF_MSG = "<|end_of_msg|>"
 
-# The tokenizer is checkpoint code, so the repo and revision that run are pinned together (bumping
-# them is deliberate). Every Kimi-K3 catalog variant (e.g. "Kimi-K3-262k") shares this tokenizer.
-_TOKENIZER_REPO = "moonshotai/Kimi-K3"
-_TOKENIZER_REVISION = "f831ab66814297da540d832a5235f8e904f29d06"
-_THINKING_EFFORTS = ("low", "high", "max")
-
 _TOOLS_CLOSE = f"{_CLOSE}tools{_SEP}"
 # Where a text channel ends: its own close is consumed, while a lookahead leaves the end of the message
 # (and, for ``response``, a ``tools`` open) for the walker. A ``think`` ends nowhere else: whatever the
@@ -87,6 +84,13 @@ _JSON_RE = re.compile(rf"<\|open\|>json{_ATTRS}<\|sep\|>(?P<value>.*?)<\|close\|
 
 
 class KimiK3Codec:
+    _FAMILY = "Kimi-K3"
+    # The tokenizer is checkpoint code, so the repo and revision that run are pinned together (bumping
+    # them is deliberate). Every Kimi-K3 catalog variant (e.g. "Kimi-K3-262k") shares this tokenizer.
+    _TOKENIZER_REPO = "moonshotai/Kimi-K3"
+    _TOKENIZER_REVISION = "f831ab66814297da540d832a5235f8e904f29d06"
+    _THINKING_EFFORTS = ("low", "high", "max")
+
     def __init__(
         self,
         model_name: str | None = None,
@@ -97,16 +101,18 @@ class KimiK3Codec:
         preserve_thinking: bool | None = None,
         thinking_effort: str | None = None,
     ) -> None:
-        self._thinking_effort = check_thinking_effort(thinking_effort, supported=_THINKING_EFFORTS, family="Kimi-K3")
+        self._thinking_effort = check_thinking_effort(
+            thinking_effort, supported=self._THINKING_EFFORTS, family=self._FAMILY
+        )
         self._strip_history = preserve_thinking is False
         enable = resolve_enable_thinking(enable_thinking=enable_thinking, preserve_thinking=preserve_thinking)
         self._thinking = enable is not False
         # `model_name` only routes to this codec; the tokenizer always comes from the pinned repo.
         self._tokenizer = load_tokenizer(
-            _TOKENIZER_REPO,
+            self._TOKENIZER_REPO,
             tokenizer=tokenizer,
             hf_token=hf_token,
-            revision=_TOKENIZER_REVISION,
+            revision=self._TOKENIZER_REVISION,
             trust_remote_code=True,
         )
 
@@ -165,6 +171,22 @@ class KimiK3Codec:
         # Verbatim: the parser needs the XTML control tokens, and rendered and sampled K3 turns carry
         # no BOS/EOS to skip. Any kwarg (e.g. skip_special_tokens) would also take the slow path.
         return str(self._tokenizer.decode(tokens))
+
+
+class KimiK31Codec(KimiK3Codec):
+    """Kimi-K3.1 (``moonshotai/Kimi-K3.1-Pro``): Kimi-K3's format, tokenizer and parser.
+
+    K3.1's ``encoding_k3.py`` is Kimi-K3's at the revision pinned here plus a ``medium`` thinking effort,
+    and its tokenizer files match K3's, so K3's encoder at this revision renders K3.1 byte for byte
+    (``tests/codecs/test_kimi_k31.py`` checks this against K3.1's own renders). ``medium`` is rejected,
+    since it is the one input the two encoders treat differently. The pin is K3.1's own, so a bump of
+    K3's cannot change K3.1's render.
+    """
+
+    _FAMILY = "Kimi-K3.1"
+    _TOKENIZER_REPO = "moonshotai/Kimi-K3"
+    _TOKENIZER_REVISION = "f831ab66814297da540d832a5235f8e904f29d06"
+    _THINKING_EFFORTS = ("low", "high", "max")
 
 
 def _parse_turn(text: str, *, channel: str | None) -> tuple[Message, bool]:

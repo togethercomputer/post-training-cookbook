@@ -14,6 +14,7 @@ import pytest
 from post_training_cookbook.codecs import (
     Glm5Codec,
     KimiK3Codec,
+    KimiK31Codec,
     MiniMaxM3Codec,
     MuseSparkCodec,
     Qwen35Codec,
@@ -47,6 +48,7 @@ _KEEPS_HISTORY_REASONING: dict[str, bool] = {
     REFERENCE_MODELS["qwen3.5"]: False,
     _GLM5: True,
     REFERENCE_MODELS["kimi-k3"]: True,
+    REFERENCE_MODELS["kimi-k3.1"]: True,
     REFERENCE_MODELS["minimax-m3"]: True,
     REFERENCE_MODELS["muse-spark"]: True,
 }
@@ -258,6 +260,7 @@ class TestParseResponseRoundTrip:
 # the template never renders.
 _SAMPLED_TURN_FAMILIES = {
     "kimi-k3": (KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS),
+    "kimi-k3.1": (KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS),
     "minimax-m3": (MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS),
     "muse-spark": (MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS),
 }
@@ -559,6 +562,7 @@ _STOP_TOKENS: dict[str, tuple[str, ...]] = {
     _GLM5: ("<|endoftext|>", "<|user|>", "<|observation|>"),
     # Kimi-K3 ends every message, assistant turns included, with `<|end_of_msg|>`.
     REFERENCE_MODELS["kimi-k3"]: ("<|end_of_msg|>",),
+    REFERENCE_MODELS["kimi-k3.1"]: ("<|end_of_msg|>",),
     REFERENCE_MODELS["minimax-m3"]: ("[e~[",),
     # Muse Spark closes a turn with `<|eot|>`; `<|eom|>` between its channels does not stop sampling.
     REFERENCE_MODELS["muse-spark"]: ("<|eot|>",),
@@ -589,6 +593,8 @@ _THINKING_EFFORTS: dict[str, tuple[tuple[str, ...], str | None]] = {
     REFERENCE_MODELS["qwen3.5"]: ((), None),
     _GLM5: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["kimi-k3"]: (("low", "high", "max"), "max"),
+    # K3.1's encoder also takes `medium`, which the Kimi-K3 encoder it renders through cannot.
+    REFERENCE_MODELS["kimi-k3.1"]: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["minimax-m3"]: ((), None),
     REFERENCE_MODELS["muse-spark"]: (("low", "medium", "high", "xhigh"), "xhigh"),
 }
@@ -643,6 +649,7 @@ class TestCodecRouting:
             (_GLM5, Glm5Codec),
             ("moonshotai/Kimi-K3", KimiK3Codec),
             ("moonshotai/Kimi-K3-262k", KimiK3Codec),
+            ("moonshotai/Kimi-K3.1-Pro", KimiK31Codec),
             ("MiniMaxAI/MiniMax-M3", MiniMaxM3Codec),
             ("MiniMaxAI/MiniMax-M3-MXFP8", MiniMaxM3Codec),
             ("meta-models/Muse-Spark-Open-816B-A42B", MuseSparkCodec),

@@ -28,6 +28,7 @@ REFERENCE_MODELS: dict[str, str] = {
     "qwen3.5": "Qwen/Qwen3.5-0.8B",
     "glm-5": "zai-org/GLM-5.3",
     "kimi-k3": "moonshotai/Kimi-K3",
+    "kimi-k3.1": "moonshotai/Kimi-K3.1-Pro",
     "minimax-m3": "MiniMaxAI/MiniMax-M3",
     "muse-spark": "meta-models/Muse-Spark-Open-816B-A42B",
 }

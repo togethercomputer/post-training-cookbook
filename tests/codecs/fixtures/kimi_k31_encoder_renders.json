@@ -1,0 +1,1125 @@
+{
+ "about": "Renders by Kimi-K3.1's released tokenizer code (tokenization_kimi.TikTokenTokenizer.apply_chat_template, run from the release's own files): messages as given, tools wrapped as {\"type\": \"function\", \"function\": tool}, and thinking / thinking_effort passed only when not null, so null keeps the encoder's default (thinking on, effort max).",
+ "encoder_files_sha256": {
+  "encoding_k3.py": "e52c0427af2c2f263b56b3a94683acae3a1f634f96e516e473370b563b175bf1",
+  "tokenization_kimi.py": "204ee39fbf13a6d6608b0d3ca1b4b04a14ac5f0a062a7fdee02e61f5d936f9c6",
+  "tokenizer_config.json": "9fc322181b8ec44236e148916aea4b6c2467b66ded7bfaff0efe623ad750b852",
+  "tiktoken.model": "b6c497a7469b33ced9c38afb1ad6e47f03f5e5dc05f15930799210ec050c5103"
+ },
+ "cases": [
+  {
+   "id": "chat-default-effort",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>What is 2+2?<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 138,
+   "token_ids_sha256": "b6c3bfc7d18afb3ce6ed983b1541ee9853e3024fa88f961a1f97e8eb1cc214d1"
+  },
+  {
+   "id": "chat-effort-low",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": "low",
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=low`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>What is 2+2?<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 139,
+   "token_ids_sha256": "0868061527c106f66e7dac042bb9c6d9371d115baf3d14bcffeb7acbfe350285"
+  },
+  {
+   "id": "chat-effort-high",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": "high",
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=high`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>What is 2+2?<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 139,
+   "token_ids_sha256": "f0d166b8299100760f6df631d4b6bdd95dc119b99177d6e8d1a91775a7f3cce5"
+  },
+  {
+   "id": "chat-effort-max",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": "max",
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>What is 2+2?<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 138,
+   "token_ids_sha256": "b6c3bfc7d18afb3ce6ed983b1541ee9853e3024fa88f961a1f97e8eb1cc214d1"
+  },
+  {
+   "id": "tool-loop-prompt-before-message-2",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide."
+    }
+   ],
+   "tools": [
+    {
+     "name": "search_catalog",
+     "description": "Search the catalog; returns every book sharing a word with the query.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "query": {
+        "type": "string",
+        "description": "Words to search for."
+       }
+      },
+      "required": [
+       "query"
+      ]
+     }
+    },
+    {
+     "name": "get_account",
+     "description": "Read a patron account, including its active holds and hold limit.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "verify",
+     "description": "Verify the patron's identity; needed before place_hold.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "place_hold",
+     "description": "Place a hold on a book; a rejected hold changes nothing.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "book_id": {
+        "type": "string",
+        "description": "Book id."
+       },
+       "pickup_days": {
+        "type": "integer",
+        "description": "Days the hold stays on the shelf."
+       },
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id",
+       "book_id",
+       "pickup_days"
+      ]
+     }
+    },
+    {
+     "name": "ask_user",
+     "description": "Ask the patron a question.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "question": {
+        "type": "string",
+        "description": "The question."
+       }
+      },
+      "required": [
+       "question"
+      ]
+     }
+    }
+   ],
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"tool-declare\"<|sep|># Tools\nHere are the available tools, described in JSONSchema.\n\n```json\n[{\"function\":{\"description\":\"Search the catalog; returns every book sharing a word with the query.\",\"name\":\"search_catalog\",\"parameters\":{\"properties\":{\"query\":{\"description\":\"Words to search for.\",\"type\":\"string\"}},\"required\":[\"query\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Read a patron account, including its active holds and hold limit.\",\"name\":\"get_account\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Verify the patron's identity; needed before place_hold.\",\"name\":\"verify\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Place a hold on a book; a rejected hold changes nothing.\",\"name\":\"place_hold\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"},\"book_id\":{\"description\":\"Book id.\",\"type\":\"string\"},\"pickup_days\":{\"description\":\"Days the hold stays on the shelf.\",\"type\":\"integer\"}},\"required\":[\"account_id\",\"book_id\",\"pickup_days\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Ask the patron a question.\",\"name\":\"ask_user\",\"parameters\":{\"properties\":{\"question\":{\"description\":\"The question.\",\"type\":\"string\"}},\"required\":[\"question\"],\"type\":\"object\"}},\"type\":\"function\"}]\n```<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 498,
+   "token_ids_sha256": "3fab60da0aada341f8e14ac68085e08be8197707985b14dea550fb6994f3c6b3"
+  },
+  {
+   "id": "tool-loop-prompt-before-message-7",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide."
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "I need the catalog entries and the account before anything else.",
+     "content": "I'll look up the guide and the account.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"coastal birds field guide\"}"
+       }
+      },
+      {
+       "id": "call_2",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)",
+     "tool_call_id": "call_1",
+     "name": "search_catalog"
+    },
+    {
+     "role": "tool",
+     "content": "{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}",
+     "tool_call_id": "call_2",
+     "name": "get_account"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "verified A-204",
+     "tool_call_id": "call_1",
+     "name": "verify"
+    }
+   ],
+   "tools": [
+    {
+     "name": "search_catalog",
+     "description": "Search the catalog; returns every book sharing a word with the query.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "query": {
+        "type": "string",
+        "description": "Words to search for."
+       }
+      },
+      "required": [
+       "query"
+      ]
+     }
+    },
+    {
+     "name": "get_account",
+     "description": "Read a patron account, including its active holds and hold limit.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "verify",
+     "description": "Verify the patron's identity; needed before place_hold.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "place_hold",
+     "description": "Place a hold on a book; a rejected hold changes nothing.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "book_id": {
+        "type": "string",
+        "description": "Book id."
+       },
+       "pickup_days": {
+        "type": "integer",
+        "description": "Days the hold stays on the shelf."
+       },
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id",
+       "book_id",
+       "pickup_days"
+      ]
+     }
+    },
+    {
+     "name": "ask_user",
+     "description": "Ask the patron a question.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "question": {
+        "type": "string",
+        "description": "The question."
+       }
+      },
+      "required": [
+       "question"
+      ]
+     }
+    }
+   ],
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"tool-declare\"<|sep|># Tools\nHere are the available tools, described in JSONSchema.\n\n```json\n[{\"function\":{\"description\":\"Search the catalog; returns every book sharing a word with the query.\",\"name\":\"search_catalog\",\"parameters\":{\"properties\":{\"query\":{\"description\":\"Words to search for.\",\"type\":\"string\"}},\"required\":[\"query\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Read a patron account, including its active holds and hold limit.\",\"name\":\"get_account\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Verify the patron's identity; needed before place_hold.\",\"name\":\"verify\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Place a hold on a book; a rejected hold changes nothing.\",\"name\":\"place_hold\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"},\"book_id\":{\"description\":\"Book id.\",\"type\":\"string\"},\"pickup_days\":{\"description\":\"Days the hold stays on the shelf.\",\"type\":\"integer\"}},\"required\":[\"account_id\",\"book_id\",\"pickup_days\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Ask the patron a question.\",\"name\":\"ask_user\",\"parameters\":{\"properties\":{\"question\":{\"description\":\"The question.\",\"type\":\"string\"}},\"required\":[\"question\"],\"type\":\"object\"}},\"type\":\"function\"}]\n```<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>I need the catalog entries and the account before anything else.<|close|>think<|sep|><|open|>response<|sep|>I'll look up the guide and the account.<|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"search_catalog\" index=\"1\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>coastal birds field guide<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"2\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"1\"<|sep|>BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"2\"<|sep|>{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"verify\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"verify\" index=\"1\"<|sep|>verified A-204<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 841,
+   "token_ids_sha256": "d596df9691ed9e0303d17750921fa4ea90aa75a9260ec3758419e6a2db57646c"
+  },
+  {
+   "id": "tool-loop-full-episode",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide."
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "I need the catalog entries and the account before anything else.",
+     "content": "I'll look up the guide and the account.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"coastal birds field guide\"}"
+       }
+      },
+      {
+       "id": "call_2",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)",
+     "tool_call_id": "call_1",
+     "name": "search_catalog"
+    },
+    {
+     "role": "tool",
+     "content": "{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}",
+     "tool_call_id": "call_2",
+     "name": "get_account"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "verified A-204",
+     "tool_call_id": "call_1",
+     "name": "verify"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "Verified. Hold BOOK-1187 for 7 days.",
+     "content": "",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "place_hold",
+        "arguments": "{\"account_id\": \"A-204\", \"book_id\": \"BOOK-1187\", \"pickup_days\": 7}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "place_hold_accepted: {\"account_id\": \"A-204\", \"book_id\": \"BOOK-1187\", \"pickup_days\": 7}",
+     "tool_call_id": "call_1",
+     "name": "place_hold"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "Accepted. Summarise for the patron.",
+     "content": "Placed a hold on BOOK-1187 (3rd edition, 2025) for A-204; pick it up within 7 days."
+    }
+   ],
+   "tools": [
+    {
+     "name": "search_catalog",
+     "description": "Search the catalog; returns every book sharing a word with the query.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "query": {
+        "type": "string",
+        "description": "Words to search for."
+       }
+      },
+      "required": [
+       "query"
+      ]
+     }
+    },
+    {
+     "name": "get_account",
+     "description": "Read a patron account, including its active holds and hold limit.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "verify",
+     "description": "Verify the patron's identity; needed before place_hold.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id"
+      ]
+     }
+    },
+    {
+     "name": "place_hold",
+     "description": "Place a hold on a book; a rejected hold changes nothing.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "book_id": {
+        "type": "string",
+        "description": "Book id."
+       },
+       "pickup_days": {
+        "type": "integer",
+        "description": "Days the hold stays on the shelf."
+       },
+       "account_id": {
+        "type": "string",
+        "description": "Patron account id."
+       }
+      },
+      "required": [
+       "account_id",
+       "book_id",
+       "pickup_days"
+      ]
+     }
+    },
+    {
+     "name": "ask_user",
+     "description": "Ask the patron a question.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "question": {
+        "type": "string",
+        "description": "The question."
+       }
+      },
+      "required": [
+       "question"
+      ]
+     }
+    }
+   ],
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": false,
+   "text": "<|open|>message role=\"system\" type=\"tool-declare\"<|sep|># Tools\nHere are the available tools, described in JSONSchema.\n\n```json\n[{\"function\":{\"description\":\"Search the catalog; returns every book sharing a word with the query.\",\"name\":\"search_catalog\",\"parameters\":{\"properties\":{\"query\":{\"description\":\"Words to search for.\",\"type\":\"string\"}},\"required\":[\"query\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Read a patron account, including its active holds and hold limit.\",\"name\":\"get_account\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Verify the patron's identity; needed before place_hold.\",\"name\":\"verify\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Place a hold on a book; a rejected hold changes nothing.\",\"name\":\"place_hold\",\"parameters\":{\"properties\":{\"account_id\":{\"description\":\"Patron account id.\",\"type\":\"string\"},\"book_id\":{\"description\":\"Book id.\",\"type\":\"string\"},\"pickup_days\":{\"description\":\"Days the hold stays on the shelf.\",\"type\":\"integer\"}},\"required\":[\"account_id\",\"book_id\",\"pickup_days\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Ask the patron a question.\",\"name\":\"ask_user\",\"parameters\":{\"properties\":{\"question\":{\"description\":\"The question.\",\"type\":\"string\"}},\"required\":[\"question\"],\"type\":\"object\"}},\"type\":\"function\"}]\n```<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>I need the catalog entries and the account before anything else.<|close|>think<|sep|><|open|>response<|sep|>I'll look up the guide and the account.<|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"search_catalog\" index=\"1\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>coastal birds field guide<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"2\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"1\"<|sep|>BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"2\"<|sep|>{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"verify\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"verify\" index=\"1\"<|sep|>verified A-204<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>Verified. Hold BOOK-1187 for 7 days.<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"place_hold\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|open|>argument key=\"book_id\" type=\"string\"<|sep|>BOOK-1187<|close|>argument<|sep|><|open|>argument key=\"pickup_days\" type=\"number\"<|sep|>7<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"place_hold\" index=\"1\"<|sep|>place_hold_accepted: {\"account_id\": \"A-204\", \"book_id\": \"BOOK-1187\", \"pickup_days\": 7}<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>Accepted. Summarise for the patron.<|close|>think<|sep|><|open|>response<|sep|>Placed a hold on BOOK-1187 (3rd edition, 2025) for A-204; pick it up within 7 days.<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>",
+   "num_tokens": 1056,
+   "token_ids_sha256": "e9b07bd219bee14a94688248ec8eca707265850c42b4f5701264e116af7263a7"
+  },
+  {
+   "id": "thinking-off-history",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide."
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "I need the catalog entries and the account before anything else.",
+     "content": "I'll look up the guide and the account.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"coastal birds field guide\"}"
+       }
+      },
+      {
+       "id": "call_2",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)",
+     "tool_call_id": "call_1",
+     "name": "search_catalog"
+    },
+    {
+     "role": "tool",
+     "content": "{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}",
+     "tool_call_id": "call_2",
+     "name": "get_account"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    }
+   ],
+   "tools": null,
+   "thinking": false,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|>I'll look up the guide and the account.<|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"search_catalog\" index=\"1\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>coastal birds field guide<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"2\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"1\"<|sep|>BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"2\"<|sep|>{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"verify\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|>",
+   "num_tokens": 350,
+   "token_ids_sha256": "cd3e41025a28370f9d47a0e1a6eb612d37ebb6dcdae3574704c633bd41ac8301"
+  },
+  {
+   "id": "thinking-off-effort-ignored",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id."
+    },
+    {
+     "role": "user",
+     "content": "Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide."
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "I need the catalog entries and the account before anything else.",
+     "content": "I'll look up the guide and the account.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"coastal birds field guide\"}"
+       }
+      },
+      {
+       "id": "call_2",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)",
+     "tool_call_id": "call_1",
+     "name": "search_catalog"
+    },
+    {
+     "role": "tool",
+     "content": "{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}",
+     "tool_call_id": "call_2",
+     "name": "get_account"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "The newest edition is BOOK-1187 (2025). The account has 2 of 5 holds, so one more is allowed.\n\nVerify first.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-204\"}"
+       }
+      }
+     ]
+    }
+   ],
+   "tools": null,
+   "thinking": false,
+   "thinking_effort": "low",
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\"<|sep|>You are a library assistant. Use the tools to look up books and patron accounts, then place\nexactly one hold per request. Never guess an id.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>Sam Lee (account A-204) wants a hold on the newest edition of the coastal birds guide.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|>I'll look up the guide and the account.<|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"search_catalog\" index=\"1\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>coastal birds field guide<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"2\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"1\"<|sep|>BOOK-1101\nA Field Guide to Coastal Birds, 2nd edition (2019)\n\nBOOK-1187\nA Field Guide to Coastal Birds, 3rd edition (2025)<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"2\"<|sep|>{\"account_id\": \"A-204\", \"active_holds\": 2, \"hold_limit\": 5, \"name\": \"Sam Lee\"}<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"verify\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-204<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>response<|sep|>",
+   "num_tokens": 350,
+   "token_ids_sha256": "cd3e41025a28370f9d47a0e1a6eb612d37ebb6dcdae3574704c633bd41ac8301"
+  },
+  {
+   "id": "earlier-turn-reasoning",
+   "messages": [
+    {
+     "role": "system",
+     "content": "be brief"
+    },
+    {
+     "role": "user",
+     "content": "q1"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "reasoning one",
+     "content": "a1"
+    },
+    {
+     "role": "user",
+     "content": "q2"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "reasoning two",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"x\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "search_catalog: no matching books",
+     "tool_call_id": "call_1",
+     "name": "search_catalog"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "reasoning three",
+     "content": "a2"
+    },
+    {
+     "role": "user",
+     "content": "q3"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\"<|sep|>be brief<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>q1<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>reasoning one<|close|>think<|sep|><|open|>response<|sep|>a1<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>q2<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>reasoning two<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"search_catalog\" index=\"1\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>x<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"1\"<|sep|>search_catalog: no matching books<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>reasoning three<|close|>think<|sep|><|open|>response<|sep|>a2<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>q3<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 273,
+   "token_ids_sha256": "cf42d17ac335ebcd6360d7e9e7a1df1c5c5c9118fd7b18ea89e90446ad87e9b1"
+  },
+  {
+   "id": "argument-literals",
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "r",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-1\", \"n\": 3, \"ratio\": 2.50, \"big\": 1e3, \"neg\": -0.0, \"meta\": {\"k\":1,\"s\":\"\\u00e9\"}, \"arr\": [1, 2,3], \"flag\": true, \"none\": null, \"esc\": \"line\\nbreak \\\"q\\\" \\u00e9 \\\\ tab\\t\", \"uni\": \"日本\", \"spaced\"  :   7  }"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c1",
+     "name": "get_account"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>go<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>r<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"get_account\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-1<|close|>argument<|sep|><|open|>argument key=\"n\" type=\"number\"<|sep|>3<|close|>argument<|sep|><|open|>argument key=\"ratio\" type=\"number\"<|sep|>2.50<|close|>argument<|sep|><|open|>argument key=\"big\" type=\"number\"<|sep|>1e3<|close|>argument<|sep|><|open|>argument key=\"neg\" type=\"number\"<|sep|>-0.0<|close|>argument<|sep|><|open|>argument key=\"meta\" type=\"object\"<|sep|>{\"k\":1,\"s\":\"\\u00e9\"}<|close|>argument<|sep|><|open|>argument key=\"arr\" type=\"array\"<|sep|>[1, 2,3]<|close|>argument<|sep|><|open|>argument key=\"flag\" type=\"boolean\"<|sep|>true<|close|>argument<|sep|><|open|>argument key=\"none\" type=\"null\"<|sep|>null<|close|>argument<|sep|><|open|>argument key=\"esc\" type=\"string\"<|sep|>line\nbreak \"q\" é \\ tab\t<|close|>argument<|sep|><|open|>argument key=\"uni\" type=\"string\"<|sep|>日本<|close|>argument<|sep|><|open|>argument key=\"spaced\" type=\"number\"<|sep|>7<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"1\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 374,
+   "token_ids_sha256": "48ad1f8eea0861cb92c5eb9c102a485e0cabdedd92aa2829f187cb621aa2b23b"
+  },
+  {
+   "id": "argument-fallbacks",
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "r",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "function": {
+        "name": "get_account",
+        "arguments": "not json"
+       }
+      },
+      {
+       "id": "c2",
+       "function": {
+        "name": "get_account",
+        "arguments": "   "
+       }
+      },
+      {
+       "id": "c3",
+       "function": {
+        "name": "get_account",
+        "arguments": ""
+       }
+      },
+      {
+       "id": "c4",
+       "function": {
+        "name": "get_account",
+        "arguments": "[1, 2]"
+       }
+      },
+      {
+       "id": "c5",
+       "function": {
+        "name": "get_account",
+        "arguments": "{}"
+       }
+      },
+      {
+       "id": "c6",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"a\": 1} trailing words"
+       }
+      },
+      {
+       "id": "c7",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"a\": 1,}"
+       }
+      },
+      {
+       "id": "c8",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"x\": NaN, \"y\": -Infinity}"
+       }
+      },
+      {
+       "id": "c9",
+       "function": {
+        "name": "get_account",
+        "arguments": "  {\"padded\": \"yes\"}  "
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c1",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c2",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c3",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c4",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c5",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c6",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c7",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c8",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c9",
+     "name": "get_account"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>go<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>r<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"get_account\" index=\"1\"<|sep|><|open|>json type=\"object\"<|sep|>not json<|close|>json<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"2\"<|sep|><|open|>json type=\"object\"<|sep|>   <|close|>json<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"3\"<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"4\"<|sep|><|open|>json type=\"object\"<|sep|>[1, 2]<|close|>json<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"5\"<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"6\"<|sep|><|open|>argument key=\"a\" type=\"number\"<|sep|>1<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"7\"<|sep|><|open|>json type=\"object\"<|sep|>{\"a\": 1,}<|close|>json<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"8\"<|sep|><|open|>argument key=\"x\" type=\"number\"<|sep|>NaN<|close|>argument<|sep|><|open|>argument key=\"y\" type=\"number\"<|sep|>-Infinity<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"get_account\" index=\"9\"<|sep|><|open|>argument key=\"padded\" type=\"string\"<|sep|>yes<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"1\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"2\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"3\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"4\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"5\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"6\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"7\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"8\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"9\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 562,
+   "token_ids_sha256": "3aff57b3d164f9e9f919c24c29ce51f55047c052662fdbb4a6bc2a9853e4d112"
+  },
+  {
+   "id": "reasoning-and-content-edges",
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "",
+     "content": "empty reasoning"
+    },
+    {
+     "role": "user",
+     "content": "again"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "  \n",
+     "content": "whitespace-only reasoning"
+    },
+    {
+     "role": "user",
+     "content": "again"
+    },
+    {
+     "role": "assistant",
+     "content": "no reasoning key"
+    },
+    {
+     "role": "user",
+     "content": "again"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "spelled <|open|>call tool=\"x\"<|sep|> and <|end_of_msg|> out",
+     "content": "  padded answer with <|close|>response<|sep|> text \n"
+    },
+    {
+     "role": "user",
+     "content": "again"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "r",
+     "content": "  \n"
+    },
+    {
+     "role": "user",
+     "content": "again"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "r",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-2\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "verified A-2",
+     "tool_call_id": "c1",
+     "name": "verify"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>go<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>empty reasoning<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>again<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>  \n<|close|>think<|sep|><|open|>response<|sep|>whitespace-only reasoning<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>again<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|><|close|>think<|sep|><|open|>response<|sep|>no reasoning key<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>again<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>spelled <|open|>call tool=\"x\"<|sep|> and <|end_of_msg|> out<|close|>think<|sep|><|open|>response<|sep|>  padded answer with <|close|>response<|sep|> text \n<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>again<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>r<|close|>think<|sep|><|open|>response<|sep|>  \n<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>again<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>r<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"verify\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-2<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"verify\" index=\"1\"<|sep|>verified A-2<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 400,
+   "token_ids_sha256": "160ad12fcc01971373bfc91eab90e94495966bb75b7a3a7993f33a1705fcbd21"
+  },
+  {
+   "id": "tool-results-reordered-and-unnamed",
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "three lookups",
+     "tool_calls": [
+      {
+       "id": "a",
+       "function": {
+        "name": "get_account",
+        "arguments": "{\"account_id\": \"A-1\"}"
+       }
+      },
+      {
+       "id": "b",
+       "function": {
+        "name": "verify",
+        "arguments": "{\"account_id\": \"A-1\"}"
+       }
+      },
+      {
+       "id": "c",
+       "function": {
+        "name": "search_catalog",
+        "arguments": "{\"query\": \"birds\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "books",
+     "tool_call_id": "c"
+    },
+    {
+     "role": "tool",
+     "content": "account",
+     "tool_call_id": "a",
+     "name": "get_account"
+    },
+    {
+     "role": "tool",
+     "content": "verified",
+     "tool_call_id": "b",
+     "name": "get_account"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>go<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>three lookups<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"get_account\" index=\"1\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-1<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"verify\" index=\"2\"<|sep|><|open|>argument key=\"account_id\" type=\"string\"<|sep|>A-1<|close|>argument<|sep|><|close|>call<|sep|><|open|>call tool=\"search_catalog\" index=\"3\"<|sep|><|open|>argument key=\"query\" type=\"string\"<|sep|>birds<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"get_account\" index=\"1\"<|sep|>account<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"verify\" index=\"2\"<|sep|>verified<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"search_catalog\" index=\"3\"<|sep|>books<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 277,
+   "token_ids_sha256": "b096435e58beb22e8cb61202dc1fcb802ab921b964e285b2b14befbc553b5447"
+  },
+  {
+   "id": "attribute-escaping-and-names",
+   "messages": [
+    {
+     "role": "system",
+     "name": "ops",
+     "content": "sys"
+    },
+    {
+     "role": "user",
+     "name": "alice",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "r",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "function": {
+        "name": "odd&\"name",
+        "arguments": "{\"we\\\"ird&key\": 1, \"x\": \"<|sep|>\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "content": "ok",
+     "tool_call_id": "c1",
+     "name": "odd&\"name"
+    }
+   ],
+   "tools": [
+    {
+     "name": "odd&\"name",
+     "description": "é ü 日本 — non-ASCII stays raw",
+     "parameters": {
+      "type": "object"
+     }
+    }
+   ],
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": true,
+   "text": "<|open|>message role=\"system\" type=\"tool-declare\"<|sep|># Tools\nHere are the available tools, described in JSONSchema.\n\n```json\n[{\"function\":{\"description\":\"é ü 日本 — non-ASCII stays raw\",\"name\":\"odd&\\\"name\",\"parameters\":{\"type\":\"object\"}},\"type\":\"function\"}]\n```<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"system\" name=\"ops\"<|sep|>sys<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\" name=\"alice\"<|sep|>hi<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>r<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool=\"odd&amp;&quot;name\" index=\"1\"<|sep|><|open|>argument key=\"we&quot;ird&amp;key\" type=\"number\"<|sep|>1<|close|>argument<|sep|><|open|>argument key=\"x\" type=\"string\"<|sep|><|sep|><|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|><|close|>message<|sep|><|end_of_msg|><|open|>message role=\"tool\" tool=\"odd&amp;&quot;name\" index=\"1\"<|sep|>ok<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>",
+   "num_tokens": 293,
+   "token_ids_sha256": "69e6b652418fe7c06d73a867b0564b68a76fd70ed12e117bcc754dca2449f835"
+  },
+  {
+   "id": "no-tools-no-gen-prompt",
+   "messages": [
+    {
+     "role": "user",
+     "content": "q"
+    },
+    {
+     "role": "assistant",
+     "reasoning_content": "think",
+     "content": "answer"
+    }
+   ],
+   "tools": null,
+   "thinking": null,
+   "thinking_effort": null,
+   "add_generation_prompt": false,
+   "text": "<|open|>message role=\"system\" type=\"thinking-effort\"<|sep|>`thinking_effort` guides on how much to think in your thinking channel (not including the response channel), supported values include `low`, `medium`, `high`, and `max`.\nNow the system is invoked with `thinking_effort=max`.<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"user\"<|sep|>q<|close|>message<|sep|><|end_of_msg|><|open|>message role=\"assistant\"<|sep|><|open|>think<|sep|>think<|close|>think<|sep|><|open|>response<|sep|>answer<|close|>response<|sep|><|close|>message<|sep|><|end_of_msg|>",
+   "num_tokens": 104,
+   "token_ids_sha256": "7a8b0f0985861e0622cbd72ec6687cf850bd89eb95bc464e03dcadb37467bdb1"
+  }
+ ]
+}

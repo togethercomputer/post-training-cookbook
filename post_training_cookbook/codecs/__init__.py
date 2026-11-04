@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from post_training_cookbook.codecs.base import MessageCodec, PreserveThinkingForkedWarning
 from post_training_cookbook.codecs.glm5 import Glm5Codec
-from post_training_cookbook.codecs.kimi_k3 import KimiK3Codec
+from post_training_cookbook.codecs.kimi_k3 import KimiK3Codec, KimiK31Codec
 from post_training_cookbook.codecs.minimax_m3 import MiniMaxM3Codec
 from post_training_cookbook.codecs.muse_spark import MuseSparkCodec
 from post_training_cookbook.codecs.qwen3_5 import Qwen35Codec
@@ -11,6 +11,7 @@ from post_training_cookbook.types import Message, ToolSpec
 __all__ = [
     "Glm5Codec",
     "KimiK3Codec",
+    "KimiK31Codec",
     "MessageCodec",
     "MiniMaxM3Codec",
     "MuseSparkCodec",
@@ -25,6 +26,7 @@ __all__ = [
 _CODECS: list[tuple[str, type[MessageCodec]]] = [
     ("glm-5.3", Glm5Codec),
     ("kimi-k3", KimiK3Codec),
+    ("kimi-k3.1", KimiK31Codec),
     ("minimax-m3", MiniMaxM3Codec),
     ("muse-spark-open", MuseSparkCodec),
     ("qwen3.5", Qwen35Codec),
@@ -64,7 +66,7 @@ def get_codec(
 ) -> MessageCodec:
     """Resolve the right codec for a HF model name like 'Qwen/Qwen3.5-9B'.
 
-    ``thinking_effort`` is family-specific (``low``/``high``/``max`` for Kimi-K3 and GLM-5,
+    ``thinking_effort`` is family-specific (``low``/``high``/``max`` for Kimi-K3, Kimi-K3.1 and GLM-5,
     ``low``/``medium``/``high``/``xhigh`` for Muse Spark);
     ``None`` keeps the template default, and families without one reject any value.
     """
