@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -30,4 +33,4 @@ jobs:
             pyproject.toml
 
       - name: Run tests
-        run: uv run --frozen --group dev pytest tests -v
+        run: uv run --frozen --extra serving --group dev pytest tests -v
