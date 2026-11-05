@@ -22,6 +22,10 @@ export WANDB_API_KEY=...      # optional
 
 ## Quick start
 
+To expose a live RL sampler to an OpenAI-compatible HTTP client,
+see [the rollout endpoint recipe](recipes/serving/README.md) (chat, tools,
+buffered SSE, and optional token-level capture).
+
 **New to the service?** Open a notebook:
 
 - `notebooks/grpo_example.ipynb` — GRPO training on GSM8K
