@@ -10,11 +10,15 @@ the same ``<tool_call><function=…><parameter=…>`` body as Qwen3.5, so parsin
   new sequence there.
 - ``truncate_history_thinking`` (default on) drops reasoning from assistant turns before the last user
   message. ``preserve_thinking=True`` turns it off natively, and ``False`` sets it explicitly.
-- ``medium_effort`` appends ``{reasoning effort: efficient}`` to the last user message. It is
-  ``thinking_effort="medium"``; ``"high"`` is the template default. With thinking off it is not rendered.
+- ``medium_effort`` appends ``{reasoning effort: efficient}`` to the last user message, with thinking on
+  or off. It is ``thinking_effort="medium"``; ``"high"`` is the template default. Since the hint moves to
+  each new user message, a prompt rendered before a user turn does not extend the next one, so ``"medium"``
+  splits a multi-turn episode at every user message, even with ``preserve_thinking=True``. That matches
+  what inference sees.
 
-The tokenizer and template are pinned to the revision Together's RL catalog serves, so every model name
-that routes here renders with the same files.
+The tokenizer and template are pinned to the revision Together's RL catalog serves, so every Super VL name
+that routes here (BF16, FP8 and other precisions) renders with the same files. Other Nemotron 3.5 models
+do not route here, since they ship their own tokenizers.
 """
 
 from __future__ import annotations
@@ -75,7 +79,7 @@ class Nemotron35Codec(Qwen35Codec):
             kwargs["enable_thinking"] = self._enable_thinking
         if self._preserve_thinking is not None:
             kwargs["truncate_history_thinking"] = not self._preserve_thinking
-        # The effort line only steers reasoning, so thinking off renders without it, as other families do.
-        if self._thinking_effort is not None and self._enable_thinking is not False:
+        # The template adds the effort hint with thinking off too, so it is passed through as serving does.
+        if self._thinking_effort is not None:
             kwargs["medium_effort"] = self._thinking_effort == "medium"
         return self._tokenizer.apply_chat_template(messages_for_template(messages), **kwargs)["input_ids"]

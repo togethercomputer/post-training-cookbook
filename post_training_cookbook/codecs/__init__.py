@@ -24,13 +24,14 @@ __all__ = [
 ]
 
 # Longest matching prefix wins
-# "nvidia-nemotron-3.5" matches NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16 and its variants.
+# "nvidia-nemotron-3.5-super-vl" matches NVIDIA-Nemotron-3.5-Super-VL-120B-A12B and its precisions. Other
+# Nemotron 3.5 models ship their own tokenizers, so they must not match it.
 _CODECS: list[tuple[str, type[MessageCodec]]] = [
     ("glm-5.3", Glm5Codec),
     ("kimi-k3", KimiK3Codec),
     ("minimax-m3", MiniMaxM3Codec),
     ("muse-spark-open", MuseSparkCodec),
-    ("nvidia-nemotron-3.5", Nemotron35Codec),
+    ("nvidia-nemotron-3.5-super-vl", Nemotron35Codec),
     ("qwen3.5", Qwen35Codec),
     ("qwen3.6", Qwen35Codec),
     ("qwen3.8", Qwen35Codec),

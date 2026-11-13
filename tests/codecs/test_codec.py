@@ -621,7 +621,10 @@ def test_thinking_effort(model: str):
         assert _gen_prompt(model) == renders[default]
 
 
-@pytest.mark.parametrize("model", THINKING_OFF_MODELS)
+# Nemotron 3.5's template adds its effort hint with thinking off too (test_nemotron_h.py).
+@pytest.mark.parametrize(
+    "model", [model for model in THINKING_OFF_MODELS if model != REFERENCE_MODELS["nemotron-3.5"]]
+)
 def test_thinking_off_ignores_effort(model: str):
     for level in _THINKING_EFFORTS[model][0]:
         assert _gen_prompt(model, enable_thinking=False, thinking_effort=level) == _gen_prompt(
@@ -675,6 +678,8 @@ class TestCodecRouting:
             # does not model, so neither may route to it.
             "zai-org/GLM-4.6",
             "zai-org/GLM-5.2",
+            # Other Nemotron 3.5 models ship their own tokenizers, so they may not route to the Super VL codec.
+            "nvidia/NVIDIA-Nemotron-3.5-Nano-30B-A3B-BF16",
         ],
     )
     def test_unknown_model_rejected(self, model: str):

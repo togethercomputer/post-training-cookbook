@@ -362,9 +362,9 @@ GRPO/SFT configs (and `get_codec`) take three thinking options:
 
 - `enable_thinking` — on/off for the model's `<think>` output (`None` = model default; adaptive on MiniMax-M3; GLM-5 and Muse Spark always think and reject `False`).
 - `preserve_thinking` — when `True`, render history with a template that keeps `<think>` blocks across turns — natively for GLM-5, Qwen3.6, Qwen3.8 and Nemotron 3.5, via a forked template for Qwen3.5 (requires `enable_thinking != False`). When `None` (default), the stock template decides: Qwen3.5/3.6 and Nemotron 3.5 strip thinking and the conversation is split into prefix-stable sequences, while GLM-5's and Qwen3.8's keep it. `False` strips it. Kimi-K3, MiniMax-M3 and Muse Spark render history reasoning by default, so there the default and `True` render identically and `False` strips it before rendering. Only preserve thinking if inference also preserves it. See `references/concepts.md` (codecs).
-- `thinking_effort` — `low`/`high`/`max` for GLM-5 and Kimi-K3 (default `max`), `low`/`medium`/`high`/`xhigh` for Muse Spark (default `xhigh`); `None` keeps the template default. Other families reject any value.
+- `thinking_effort` — `low`/`high`/`max` for GLM-5 and Kimi-K3 (default `max`), `low`/`medium`/`high`/`xhigh` for Muse Spark (default `xhigh`), `medium`/`high` for Nemotron 3.5 (default `high`; `medium` splits multi-turn episodes at every user message); `None` keeps the template default. Other families reject any value.
 
-The codec is resolved from the model name by longest matching prefix: `qwen3.5` / `qwen3.6` / `qwen3.8` → `Qwen35Codec`, `glm-5.3` → `Glm5Codec`, `kimi-k3` → `KimiK3Codec`, `minimax-m3` → `MiniMaxM3Codec`, `muse-spark-open` → `MuseSparkCodec`, `nvidia-nemotron-3.5` → `Nemotron35Codec`.
+The codec is resolved from the model name by longest matching prefix: `qwen3.5` / `qwen3.6` / `qwen3.8` → `Qwen35Codec`, `glm-5.3` → `Glm5Codec`, `kimi-k3` → `KimiK3Codec`, `minimax-m3` → `MiniMaxM3Codec`, `muse-spark-open` → `MuseSparkCodec`, `nvidia-nemotron-3.5-super-vl` → `Nemotron35Codec`.
 
 At the default, GLM-5, Kimi-K3 and Muse Spark runs need a generous `max_sample_tokens` (or, on Kimi-K3, `enable_thinking=False`); otherwise rollouts truncate mid-reasoning.
 

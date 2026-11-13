@@ -14,7 +14,8 @@ actions). There are two ways to cope, and they make opposite trade-offs:
 - **``preserve_thinking=False``:** strip history reasoning. Same render as ``None``
   where the stock template already strips. GLM-5 and Qwen3.8 forward it to their
   template flag (``clear_thinking`` / ``preserve_thinking``), the only way those
-  templates drop history the default keeps; Kimi-K3, MiniMax-M3 and Muse Spark strip
+  templates drop history the default keeps, and Nemotron 3.5 to its
+  ``truncate_history_thinking``; Kimi-K3, MiniMax-M3 and Muse Spark strip
   it from the messages before rendering.
 - **``preserve_thinking=True``:** keep thinking in every turn, yielding a single
   prefix-stable sequence. Cheaper and simpler, but it trains on history the

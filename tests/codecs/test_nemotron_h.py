@@ -107,11 +107,23 @@ def test_history_reasoning_follows_preserve_thinking(preserve_thinking: bool | N
     assert ("earlier reasoning" in _render(codec, _HISTORY, add_generation_prompt=True)) is keeps
 
 
-def test_medium_effort_marks_only_the_last_user_message():
-    codec = get_codec(_MODEL, thinking_effort="medium")
+@pytest.mark.parametrize("enable_thinking", [None, False])
+def test_medium_effort_marks_only_the_last_user_message(enable_thinking: bool | None):
+    """The hint is rendered with thinking off too, as the template does."""
+    codec = get_codec(_MODEL, thinking_effort="medium", enable_thinking=enable_thinking)
     rendered = _render(codec, _HISTORY, add_generation_prompt=True)
     assert rendered.count("{reasoning effort: efficient}") == 1
     assert "u2\n\n{reasoning effort: efficient}" in rendered
+
+
+@pytest.mark.parametrize("thinking_effort, one_sequence", [("high", True), ("medium", False)])
+def test_medium_effort_splits_at_each_user_message(thinking_effort: str, one_sequence: bool):
+    """The hint moves to each new user message, so even with history reasoning preserved the prompt
+    before a user turn does not extend the next one."""
+    codec = get_codec(_MODEL, thinking_effort=thinking_effort, preserve_thinking=True)
+    before = codec.encode_messages(_HISTORY[:1], add_generation_prompt=True)
+    after = codec.encode_messages(_HISTORY, add_generation_prompt=True)
+    assert (after[: len(before)] == before) is one_sequence
 
 
 def test_variants_render_with_the_pinned_checkpoint(nemotron: Nemotron35Codec):
