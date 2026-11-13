@@ -16,6 +16,7 @@ dependencies = [
     "torch~=2.13",
     "tiktoken~=0.14",  # Kimi-K3 checkpoint tokenizer (trust_remote_code)
     "together>=3.0.0,<4",  # Capped: a new SDK major can remove modules the cookbook imports
+    "sacrebleu~=2.6",
 ]
 
 [build-system]
