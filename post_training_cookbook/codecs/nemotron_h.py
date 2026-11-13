@@ -1,8 +1,8 @@
-r"""Nemotron 3.5 codec: the checkpoint's own chat template, with Qwen3.5's nested-XML tool-call grammar.
+r"""Nemotron 3.5 codec: the checkpoint's own chat template, with the nested-XML tool-call grammar.
 
 ``nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16`` renders ChatML turns with a ``<think>`` block and
-the same ``<tool_call><function=…><parameter=…>`` body as Qwen3.5, so parsing is shared with
-``Qwen35Codec``. Its template differs in the flags it reads:
+the same ``<tool_call><function=…><parameter=…>`` body as Qwen3.5, so parsing comes from
+``NestedXmlCodec``, as ``Qwen35Codec``'s does. Its template differs in the flags it reads:
 
 - Thinking is on by default: the generation prompt opens ``<think>\n``, and ``enable_thinking=False``
   closes it empty (``<think></think>``). A turn without reasoning also re-renders as ``<think></think>``,
@@ -13,8 +13,10 @@ the same ``<tool_call><function=…><parameter=…>`` body as Qwen3.5, so parsin
 - ``medium_effort`` appends ``{reasoning effort: efficient}`` to the last user message, with thinking on
   or off. It is ``thinking_effort="medium"``; ``"high"`` is the template default. Since the hint moves to
   each new user message, a prompt rendered before a user turn does not extend the next one, so ``"medium"``
-  splits a multi-turn episode at every user message, even with ``preserve_thinking=True``. That matches
-  what inference sees.
+  splits a multi-turn episode at every user message, even with ``preserve_thinking=True``. To serve a
+  model trained this way with the same prompts, chat-completions requests must pass
+  ``chat_template_kwargs={"medium_effort": true}``: SGLang does not map ``reasoning_effort="medium"`` to
+  this flag for this template, and the template ignores ``reasoning_effort``.
 
 The tokenizer and template are pinned to the revision Together's RL catalog serves, so every Super VL name
 that routes here (BF16, FP8 and other precisions) renders with the same files. Other Nemotron 3.5 models
@@ -31,7 +33,7 @@ from post_training_cookbook.codecs.base import (
     messages_for_template,
     resolve_enable_thinking,
 )
-from post_training_cookbook.codecs.qwen3_5 import Qwen35Codec
+from post_training_cookbook.codecs.nested_xml import NestedXmlCodec
 from post_training_cookbook.types import Message, ToolSpec
 
 NEMOTRON_35_SUPER_VL = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
@@ -39,8 +41,8 @@ NEMOTRON_35_SUPER_VL_REVISION = "fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe"
 _THINKING_EFFORTS = ("medium", "high")
 
 
-class Nemotron35Codec(Qwen35Codec):
-    """Nemotron 3.5: renders with the checkpoint's template, parses Qwen3.5's XML tool calls."""
+class Nemotron35Codec(NestedXmlCodec):
+    """Nemotron 3.5: renders with the checkpoint's template, parses nested-XML tool calls."""
 
     def __init__(
         self,
@@ -62,8 +64,7 @@ class Nemotron35Codec(Qwen35Codec):
             enable_thinking=enable_thinking, preserve_thinking=preserve_thinking
         )
         self._preserve_thinking = preserve_thinking
-        gen_prompt = self.decode(self.encode_messages([{"role": "user", "content": ""}], add_generation_prompt=True))
-        self._gen_prompt_opens_think = gen_prompt.rstrip().endswith("<think>")
+        self._detect_gen_prompt_think()
 
     def encode_messages(
         self,
@@ -79,7 +80,7 @@ class Nemotron35Codec(Qwen35Codec):
             kwargs["enable_thinking"] = self._enable_thinking
         if self._preserve_thinking is not None:
             kwargs["truncate_history_thinking"] = not self._preserve_thinking
-        # The template adds the effort hint with thinking off too, so it is passed through as serving does.
+        # The template adds the effort hint with thinking off too, so it is passed regardless of enable_thinking.
         if self._thinking_effort is not None:
             kwargs["medium_effort"] = self._thinking_effort == "medium"
         return self._tokenizer.apply_chat_template(messages_for_template(messages), **kwargs)["input_ids"]

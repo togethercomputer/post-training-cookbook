@@ -12,7 +12,8 @@ from transformers import AutoTokenizer
 
 from post_training_cookbook.codecs import PreserveThinkingForkedWarning, Qwen35Codec, get_codec
 from post_training_cookbook.codecs.base import MessageCodec
-from post_training_cookbook.codecs.qwen3_5 import _chat_template_reads_preserve_thinking, _parse_tool_body_xml
+from post_training_cookbook.codecs.nested_xml import _parse_tool_body_xml
+from post_training_cookbook.codecs.qwen3_5 import _chat_template_reads_preserve_thinking
 from post_training_cookbook.codecs.schema_coercion import param_types_by_tool
 from post_training_cookbook.types import Message, ToolSpec
 from tests.codecs import ARG_SCHEMA
