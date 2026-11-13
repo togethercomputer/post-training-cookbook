@@ -16,6 +16,7 @@ from post_training_cookbook.codecs import (
     KimiK3Codec,
     MiniMaxM3Codec,
     MuseSparkCodec,
+    Nemotron35Codec,
     Qwen35Codec,
     get_codec,
     parse_completion,
@@ -28,6 +29,7 @@ from post_training_cookbook.sft.train import TRAIN_ON_ALL, render_conversation
 from post_training_cookbook.types import Message, ToolCall, ToolCallFunction, ToolSpec
 from tests.codecs import (
     REFERENCE_MODELS,
+    SHARED_SUITE_THINKING_OFF,
     THINKING_OFF_MODELS,
     TWO_TURN_CONVERSATION,
     load_reference_codec,
@@ -37,6 +39,7 @@ from tests.codecs import (
 from tests.codecs.test_kimi_k3 import KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS
 from tests.codecs.test_minimax_m3 import MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS
 from tests.codecs.test_muse_spark import MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS
+from tests.codecs.test_nemotron_h import NEMOTRON_35_SAMPLED_TURNS, NEMOTRON_35_TOOLS
 
 _GLM5 = REFERENCE_MODELS["glm-5"]
 _MODELS = list(REFERENCE_MODELS.values())
@@ -49,6 +52,7 @@ _KEEPS_HISTORY_REASONING: dict[str, bool] = {
     REFERENCE_MODELS["kimi-k3"]: True,
     REFERENCE_MODELS["minimax-m3"]: True,
     REFERENCE_MODELS["muse-spark"]: True,
+    REFERENCE_MODELS["nemotron-3.5"]: False,
 }
 
 
@@ -245,6 +249,12 @@ class TestParseResponseRoundTrip:
         plain = _extract_response_tokens(codec, prompt, Message(role="assistant", content=""))
         assert codec.parse_response(with_call)[1]
         diverge = next((i for i, (a, b) in enumerate(zip(with_call, plain)) if a != b), len(plain))
+        # Whitespace past the divergence is still a plain answer to every parser (Nemotron 3.5 with thinking
+        # off writes `\n` before a call but nothing before an empty answer).
+        while (
+            diverge < len(with_call) and (text := codec.decode(with_call[diverge : diverge + 1])) and not text.strip()
+        ):
+            diverge += 1
         for cut in range(diverge + 1, len(with_call) + 1):
             msg, ok = codec.parse_response(with_call[:cut])
             calls = [
@@ -260,6 +270,7 @@ _SAMPLED_TURN_FAMILIES = {
     "kimi-k3": (KIMI_K3_SAMPLED_TURNS, KIMI_K3_TOOLS),
     "minimax-m3": (MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS),
     "muse-spark": (MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS),
+    "nemotron-3.5": (NEMOTRON_35_SAMPLED_TURNS, NEMOTRON_35_TOOLS),
 }
 
 
@@ -562,6 +573,7 @@ _STOP_TOKENS: dict[str, tuple[str, ...]] = {
     REFERENCE_MODELS["minimax-m3"]: ("[e~[",),
     # Muse Spark closes a turn with `<|eot|>`; `<|eom|>` between its channels does not stop sampling.
     REFERENCE_MODELS["muse-spark"]: ("<|eot|>",),
+    REFERENCE_MODELS["nemotron-3.5"]: ("<|im_end|>",),
 }
 
 
@@ -571,7 +583,7 @@ def test_every_trained_turn_ends_on_a_stop_token(model: str):
     no stop token teaches the model to generate until the token budget runs out. GLM needs
     `turn_terminator` for this: its template closes a turn with the *next* message's role
     marker, so nothing inside the turn stops it."""
-    codec = load_reference_codec(model)
+    codec = load_reference_codec(model, enable_thinking=False if model in SHARED_SUITE_THINKING_OFF else None)
     stop_ids = {single_token(codec, token) for token in _STOP_TOKENS[model]}
     runs = trained_runs(
         render_conversation(TWO_TURN_CONVERSATION, codec=codec, train_on_what=TRAIN_ON_ALL, max_length=4096)
@@ -591,6 +603,7 @@ _THINKING_EFFORTS: dict[str, tuple[tuple[str, ...], str | None]] = {
     REFERENCE_MODELS["kimi-k3"]: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["minimax-m3"]: ((), None),
     REFERENCE_MODELS["muse-spark"]: (("low", "medium", "high", "xhigh"), "xhigh"),
+    REFERENCE_MODELS["nemotron-3.5"]: (("medium", "high"), "high"),
 }
 
 
@@ -647,6 +660,8 @@ class TestCodecRouting:
             ("MiniMaxAI/MiniMax-M3-MXFP8", MiniMaxM3Codec),
             ("meta-models/Muse-Spark-Open-816B-A42B", MuseSparkCodec),
             ("meta-models/Muse-Spark-Open-816B-A42B-NVFP4", MuseSparkCodec),
+            ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16", Nemotron35Codec),
+            ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", Nemotron35Codec),
         ],
     )
     def test_resolves_expected_codec(self, model: str, expected: type[MessageCodec]):

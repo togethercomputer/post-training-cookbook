@@ -5,8 +5,8 @@ the next turn begins. Re-rendering history is then not prefix-stable, which
 matters whenever we splice trained tokens into rendered context (SFT bodies, GRPO
 actions). There are two ways to cope, and they make opposite trade-offs:
 
-- **Default (``preserve_thinking=None``):** keep the stock template. Qwen3.5 and
-  Qwen3.6 strip history reasoning; the other families keep it. ``split_turns`` — reached via
+- **Default (``preserve_thinking=None``):** keep the stock template. Qwen3.5,
+  Qwen3.6 and Nemotron 3.5 strip history reasoning; the other families keep it. ``split_turns`` — reached via
   ``render_conversation`` (SFT) and ``flatten_episode`` (GRPO) — then breaks a
   conversation into one sequence per prefix-stable run. Each turn trains against
   the history the model actually sees at inference — faithful, at the cost of more
@@ -21,7 +21,7 @@ actions). There are two ways to cope, and they make opposite trade-offs:
   default-stripping inference path will not reproduce — use it only when inference
   also preserves thinking, or accept the train/inference mismatch. Templates that
   expose a flag for this (GLM-5's ``clear_thinking``, the ``preserve_thinking``
-  of Qwen3.6 and Qwen3.8) are driven natively. Qwen3.5 needs a forked
+  of Qwen3.6 and Qwen3.8, Nemotron 3.5's ``truncate_history_thinking``) are driven natively. Qwen3.5 needs a forked
   template and says so via ``PreserveThinkingForkedWarning``. Kimi-K3's encoder
   and the MiniMax-M3 and Muse Spark templates render reasoning in every turn they are given, so
   ``None`` and ``True`` render identically, and ``False`` drops it from the
@@ -30,7 +30,7 @@ actions). There are two ways to cope, and they make opposite trade-offs:
 ``enable_thinking`` is the orthogonal on/off switch for thinking at all;
 ``preserve_thinking=True`` implies it, and a family whose template cannot turn
 thinking off (GLM-5, Muse Spark) rejects ``False``. ``thinking_effort`` picks a family's
-reasoning-budget level where the template has one (GLM-5, Kimi-K3, Muse Spark); ``None``
+reasoning-budget level where the template has one (GLM-5, Kimi-K3, Muse Spark, Nemotron 3.5); ``None``
 keeps the template default, and families without the setting reject any value.
 """
 
