@@ -28,7 +28,7 @@ import httpx
 from together import Together
 from together.post_training import ComputeConfig, ModelResourcesClient, SessionMetadata
 
-__all__ = ["resolve_base_model", "training_session"]
+__all__ = ["model_resource", "resolve_base_model", "training_session"]
 
 _READY = "MODEL_RESOURCES_STATUS_READY"
 _CLIENT_TIMEOUT = httpx.Timeout(timeout=300.0, connect=300.0)
@@ -146,6 +146,57 @@ def training_session(
                 logger.warning("stopping session %s failed (%s: %s)", session.session_id, type(exc).__name__, exc)
         try:
             resource.detach() if attached else resource.stop()
+        except Exception as exc:
+            logger.warning(
+                "releasing resource %s failed (%s: %s)", resource.model_resources_id, type(exc).__name__, exc
+            )
+
+
+@contextmanager
+def model_resource(
+    *,
+    model: str | None = None,
+    model_resources_id: str | None = None,
+    lora_enabled: bool = True,
+    optimizer_config=None,
+    num_generator_replicas: int = 1,
+):
+    """Provision-or-attach a model resource and yield its handle, for runs that start several sessions.
+
+    :func:`training_session` covers the one-session case. A run that needs several sessions on one
+    resource at once (multi-teacher distillation, say) uses this instead and creates its sessions
+    with ``resource.create_session``. With ``model`` set, the resource is provisioned and, on exit,
+    stopped with ``force=True`` so any session still attached stops with it. With
+    ``model_resources_id`` set, the resource is checked (READY, LoRA-enabled when asked, a
+    generator when ``num_generator_replicas > 0``) and left running on exit; stopping the sessions
+    it created stays the caller's job.
+    """
+    _require_single_model_source(model, model_resources_id)
+    api_key = os.environ.get("TOGETHER_API_KEY")
+    base_url = os.environ.get("TOGETHER_BASE_URL")
+    attached = model_resources_id is not None
+    if attached:
+        resource = ModelResourcesClient.attach(
+            model_resources_id=model_resources_id, api_key=api_key, base_url=base_url
+        )
+    else:
+        resource = ModelResourcesClient.create(
+            base_model=model,
+            lora_enabled=lora_enabled,
+            optimizer_config=optimizer_config,
+            compute_config=ComputeConfig(num_generator_replicas=num_generator_replicas),
+            api_key=api_key,
+            base_url=base_url,
+        )
+    try:
+        if attached:
+            _check_attachable(
+                resource.retrieve(), want_lora=lora_enabled, num_generator_replicas=num_generator_replicas
+            )
+        yield resource
+    finally:
+        try:
+            resource.detach() if attached else resource.stop(force=True)
         except Exception as exc:
             logger.warning(
                 "releasing resource %s failed (%s: %s)", resource.model_resources_id, type(exc).__name__, exc
