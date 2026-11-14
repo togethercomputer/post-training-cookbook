@@ -9,6 +9,7 @@ from typing import Any, NamedTuple
 from datasets import Dataset, load_dataset
 
 from post_training_cookbook.codecs.base import MessageCodec
+from post_training_cookbook.datasets.ifeval import IFEVAL_FUNC_NAMES, ifeval_reward, parse_ground_truth
 from post_training_cookbook.datasets.math_grader import boxed_math_reward
 from post_training_cookbook.datasets.rewards import (
     game24_accuracy,
@@ -29,6 +30,9 @@ class DatasetConfig:
     compute_metric: Callable[[str, Any], float] | None = None
     filter_fn: Callable[[dict], bool] | None = None
     few_shot_messages: list[dict[str, str]] = field(default_factory=list)
+    # Builds the dataset in place of ``load_dataset(hf_name, hf_config)[hf_split]``, for data that
+    # isn't one Hugging Face split (a mixture of several datasets, say). ``hf_*`` are then labels only.
+    loader: Callable[[], Dataset] | None = None
 
 
 class PromptExample(NamedTuple):
@@ -104,6 +108,16 @@ DATASETS: dict[str, DatasetConfig] = {
             },
         ],
     ),
+    "ifeval": DatasetConfig(
+        hf_name="allenai/RLVR-IFeval",
+        hf_config=None,
+        hf_split="train",
+        # Each row is a single user turn whose text already states its one constraint.
+        format_question=lambda row: row["messages"][0]["content"],
+        extract_target=lambda row: parse_ground_truth(row["ground_truth"]),
+        compute_reward=ifeval_reward,
+        filter_fn=lambda row: parse_ground_truth(row["ground_truth"])["func_name"] in IFEVAL_FUNC_NAMES,
+    ),
     "game24": DatasetConfig(
         hf_name="nlile/24-game",
         hf_config="default",
@@ -147,12 +161,12 @@ def load_grpo_dataset(
     num_val: int = 0,
     seed: int = 0,
 ) -> tuple[Dataset, Dataset | None]:
-    if cfg.hf_config:
-        raw = load_dataset(cfg.hf_name, cfg.hf_config)
+    if cfg.loader is not None:
+        ds = cfg.loader()
+    elif cfg.hf_config:
+        ds = load_dataset(cfg.hf_name, cfg.hf_config)[cfg.hf_split]
     else:
-        raw = load_dataset(cfg.hf_name)
-
-    ds = raw[cfg.hf_split]
+        ds = load_dataset(cfg.hf_name)[cfg.hf_split]
     if cfg.filter_fn:
         ds = ds.filter(cfg.filter_fn)
     ds = ds.shuffle(seed=seed)

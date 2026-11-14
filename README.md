@@ -68,12 +68,15 @@ uv run python recipes/sft/no_robots.py
 # DPO on HelpSteer3 (demo of compute_custom_forward_backward for custom losses)
 uv run python recipes/dpo/helpsteer3.py
 
+# Multi-teacher on-policy distillation: three GRPO experts distilled into one student, on one resource
+uv run python recipes/mopd/math_ifeval_game24.py
+
 # Hosted-model eval (no training)
 uv run python recipes/serverless_eval/gsm8k.py
 uv run python recipes/serverless_eval/tool_use_game.py
 ```
 
-Each recipe is a self-contained Python script with a `GRPOConfig` / `SFTConfig` / `DPOConfig` — edit the file directly to change hyperparameters.
+Each recipe is a self-contained Python script with a `GRPOConfig` / `SFTConfig` / `DPOConfig` / `MOPDConfig` — edit the file directly to change hyperparameters.
 
 **Model resources vs. sessions:** a *model resource* is the GPUs plus base weights — you may own it or just borrow it; a *session* is your LoRA adapter trained on top. `deepmath_sweep.py` provisions and owns a resource (deleting it when the sweep ends), `scripts/multi_lora/launch.py` provisions one and leaves it running, and `deepmath_shared.py` attaches as a tenant to one that already exists. Use `scripts/supported_models.py` to discover the GPU types available for each model. List the resources you own with `scripts/multi_lora/fetch.py` and delete them with `scripts/multi_lora/clean_up.py`. A recipe attaches by setting `model_resources_id` (and leaving `model` unset — the resource defines the base model); set `model` instead to provision a fresh resource.
 
@@ -89,6 +92,17 @@ Multi-turn (tool use, interactive environments):
 
 1. Implement an `Env` subclass under `post_training_cookbook/envs/` exposing tools and a per-step reward
 2. Create a recipe in `recipes/grpo/` that calls `train_multi_turn` with a task list and `env_factory` (see `tool_use_game.py`)
+
+## Multi-teacher on-policy distillation
+
+`post_training_cookbook/mopd/` trains one GRPO expert per domain, then distills them all into one student (multi-teacher on-policy distillation, MOPD). The student answers prompts from every domain, and each answer is scored token by token by the expert for that prompt's domain. Every expert, teacher and the student is a LoRA session on the same model resource, so they share a tokenizer and one set of GPUs; Qwen3.8-27B allows 5 sessions, so up to 4 teachers.
+
+1. **Describe the domains.** A `Domain` is a name (its teacher's routing key), a `DatasetConfig` with the prompt format and reward, and train/test split sizes. Every stage shuffles with the same seed, so test rows never reach training. `default_domains()` returns math (DeepMath-103K), instruction following (RLVR-IFEval, `datasets/ifeval.py`) and Game of 24.
+2. **Train the experts.** `experts.expert_configs` turns one `GRPOConfig` into an attached config per domain (plus a pooled-domain baseline with `include_mixed=True`), and `experts.train_experts` runs them concurrently with `train_single_turn`. Each saves training checkpoints; set `checkpoint_interval` so a failed run can continue.
+3. **Distill.** `train.train(config, domains)` opens one frozen teacher session per domain from the experts' training checkpoints (`MOPDConfig.teacher_checkpoints`; `teacher_lora_rank`/`teacher_lora_alpha` must equal the experts' settings), then trains a fresh student: it samples, each teacher scores its domain's answers with `prompt_logprobs`, and one importance-sampling `forward_backward` trains on advantage = teacher logprob − student logprob per token. The loss sums over tokens, so long-answer domains dominate; `balance="domain"` gives each domain equal weight, and `<domain>/token_frac` in `metrics.jsonl` shows the split. To train several students against the same teachers, hold `train.teacher_sessions` and call `train.train_student` once per student.
+4. **Evaluate.** `evaluate.evaluate_checkpoints` scores each model, loaded from its training checkpoint, on every domain's test split, retrying session creation while stopped sessions still hold their slots.
+
+`math_ifeval_game24.py` runs all four on one resource and stops it on exit. In our run the student came within 1.5 points of each expert on its own domain (math 77.8 vs 79.0, instruction following 92.9 vs 94.4, Game of 24 89.5 vs 90.3) and beat the pooled GRPO run on instruction following (92.9 vs 89.0), in about 3.5 hours of GPU time ($250 at $72/h). The instruction-following expert learned to game one constraint and the student inherited it, so read your experts' outputs before you distill them.
 
 ## Deploy a trained model
 
