@@ -5,6 +5,7 @@ from post_training_cookbook.codecs.glm5 import Glm5Codec
 from post_training_cookbook.codecs.kimi_k3 import KimiK3Codec
 from post_training_cookbook.codecs.minimax_m3 import MiniMaxM3Codec
 from post_training_cookbook.codecs.muse_spark import MuseSparkCodec
+from post_training_cookbook.codecs.nemotron_h import Nemotron35Codec
 from post_training_cookbook.codecs.qwen3_5 import Qwen35Codec
 from post_training_cookbook.types import Message, ToolSpec
 
@@ -14,6 +15,7 @@ __all__ = [
     "MessageCodec",
     "MiniMaxM3Codec",
     "MuseSparkCodec",
+    "Nemotron35Codec",
     "PreserveThinkingForkedWarning",
     "Qwen35Codec",
     "get_codec",
@@ -22,11 +24,14 @@ __all__ = [
 ]
 
 # Longest matching prefix wins
+# "nvidia-nemotron-3.5-super-vl" matches NVIDIA-Nemotron-3.5-Super-VL-120B-A12B and its precisions. Other
+# Nemotron 3.5 models ship their own tokenizers, so they must not match it.
 _CODECS: list[tuple[str, type[MessageCodec]]] = [
     ("glm-5.3", Glm5Codec),
     ("kimi-k3", KimiK3Codec),
     ("minimax-m3", MiniMaxM3Codec),
     ("muse-spark-open", MuseSparkCodec),
+    ("nvidia-nemotron-3.5-super-vl", Nemotron35Codec),
     ("qwen3.5", Qwen35Codec),
     ("qwen3.6", Qwen35Codec),
     ("qwen3.8", Qwen35Codec),
@@ -65,7 +70,7 @@ def get_codec(
     """Resolve the right codec for a HF model name like 'Qwen/Qwen3.5-9B'.
 
     ``thinking_effort`` is family-specific (``low``/``high``/``max`` for Kimi-K3 and GLM-5,
-    ``low``/``medium``/``high``/``xhigh`` for Muse Spark);
+    ``low``/``medium``/``high``/``xhigh`` for Muse Spark, ``medium``/``high`` for Nemotron 3.5);
     ``None`` keeps the template default, and families without one reject any value.
     """
     return resolve_codec_class(model_name)(

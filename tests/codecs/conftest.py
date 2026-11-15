@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from post_training_cookbook.codecs import _CODECS, resolve_codec_class
-from tests.codecs import REFERENCE_MODELS, THINKING_OFF_MODELS, load_reference_codec
+from tests.codecs import REFERENCE_MODELS, SHARED_SUITE_THINKING_OFF, THINKING_OFF_MODELS, load_reference_codec
 
 _COVERED_CLASSES = {resolve_codec_class(model) for model in REFERENCE_MODELS.values()}
 _SUPPORTED_CLASSES = {codec_cls for _, codec_cls in _CODECS}
@@ -18,7 +18,9 @@ _NO_THINKING_PARAMS = [param for param in _CODEC_PARAMS if param.values[0] in TH
 
 @pytest.fixture(params=_CODEC_PARAMS, scope="session")
 def codec(request):
-    return load_reference_codec(request.param)
+    return load_reference_codec(
+        request.param, enable_thinking=False if request.param in SHARED_SUITE_THINKING_OFF else None
+    )
 
 
 @pytest.fixture(params=_NO_THINKING_PARAMS, scope="session")
