@@ -1,10 +1,33 @@
-"""DeepSeek-V4.1 Flash codec backed by the release encoder (see ``vendor/SOURCES.md``).
+"""DeepSeek-V4.1 Flash text encoding and DSML tool-call parsing.
 
 Thinking is on by default, at effort ``high`` (75). ``thinking_effort`` also accepts
 ``low`` (50), ``max`` (100), or a string integer from 1 to 100. Declared tools keep
 reasoning throughout a tool loop, so sampled turns remain prefix-stable. Without
 tools the release drops reasoning before the last user message unless preserved.
 """
+
+# Text rendering adapted from encoding/encoding.py in DEEPSEEK_V41_REPO at DEEPSEEK_V41_REVISION.
+# MIT License
+#
+# Copyright (c) 2023 DeepSeek
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 from __future__ import annotations
 
@@ -16,31 +39,36 @@ from transformers import PreTrainedTokenizerBase
 
 from post_training_cookbook.codecs.base import load_tokenizer, resolve_enable_thinking, strip_history_reasoning
 from post_training_cookbook.codecs.schema_coercion import coerce_by_schema, param_types_by_tool, parse_json
-from post_training_cookbook.codecs.vendor import deepseek_v41_encoding as encoding
 from post_training_cookbook.types import Message, Role, ToolCall, ToolCallFunction, ToolSpec
 
 DEEPSEEK_V41_REPO = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 DEEPSEEK_V41_REVISION = "08c8657f02291e11b6f6b63e0e16014f8e748518"
-ENCODER_SHA256 = "13231c592e958fb39e2af6001dae69d90e7a36b265702b9b390236fb387599e2"
+
+_BOS = "<｜begin▁of▁sentence｜>"
+_EOS = "<｜end▁of▁sentence｜>"
+_SYSTEM = "<｜System｜>"
+_USER = "<｜User｜>"
+_ASSISTANT = "<｜Assistant｜>"
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+_DSML = "｜DSML｜"
+_REASONING_EFFORTS = {"low": 50, "high": 75, "max": 100}
 
 _MARKER_IDS = {
-    encoding.bos_token: 0,
-    encoding.eos_token: 1,
-    encoding.SYSTEM_SP_TOKEN: 128799,
-    encoding.USER_SP_TOKEN: 128803,
-    encoding.ASSISTANT_SP_TOKEN: 128804,
-    encoding.thinking_start_token: 128821,
-    encoding.thinking_end_token: 128822,
-    encoding.dsml_token: 128825,
+    _BOS: 0,
+    _EOS: 1,
+    _SYSTEM: 128799,
+    _USER: 128803,
+    _ASSISTANT: 128804,
+    _THINK_OPEN: 128821,
+    _THINK_CLOSE: 128822,
+    _DSML: 128825,
 }
-_DSML = encoding.dsml_token
-_THINK_OPEN = encoding.thinking_start_token
-_THINK_CLOSE = encoding.thinking_end_token
-_CALLS_OPEN = f"<{_DSML}{encoding.tool_calls_block_name}>"
-_CALLS_CLOSE = f"</{_DSML}{encoding.tool_calls_block_name}>"
+_CALLS_OPEN = f"<{_DSML} calls>"
+_CALLS_CLOSE = f"</{_DSML} calls>"
 _CALLS_PREFIXES = tuple(_CALLS_OPEN[:i] for i in range(1, len(_CALLS_OPEN)))
-_INVOKE = f"{_DSML}{encoding.tool_call_tag_name}"
-_PARAMETER = f"{_DSML}{encoding.tool_parameter_tag_name}"
+_INVOKE = f"{_DSML} invoke"
+_PARAMETER = f"{_DSML} parameter"
 # Match the serving parser's spacing and zero-argument self-closing calls.
 _INVOKE_RE = re.compile(rf'<{_INVOKE}\s+name="(?P<name>[^"]*)"\s*(?:/>|>(?P<body>.*?)</{_INVOKE}>)', re.DOTALL)
 _PARAMETER_RE = re.compile(
@@ -59,8 +87,41 @@ _SCHEMA_TYPES: dict[str, type | tuple[type, ...]] = {
 }
 
 
+_TOOLS_TEMPLATE = (
+    "## Tools\n"
+    "\n"
+    "You have access to a set of tools to help answer the user's question. You can invoke tools by writing a "
+    '"<{dsml_token}{tc_block_name}>" block like the following:\n'
+    "\n"
+    "<{dsml_token}{tc_block_name}>\n"
+    '<{dsml_token}{tool_call_tag_name} name="$TOOL_NAME">\n'
+    '<{dsml_token}{tool_parameter_tag_name} name="$PARAMETER_NAME" '
+    'string="true|false">$PARAMETER_VALUE</{dsml_token}{tool_parameter_tag_name}>\n'
+    "...\n"
+    "</{dsml_token}{tool_call_tag_name}>\n"
+    '<{dsml_token}{tool_call_tag_name} name="$TOOL_NAME2">\n'
+    "...\n"
+    "</{dsml_token}{tool_call_tag_name}>\n"
+    "</{dsml_token}{tc_block_name}>\n"
+    "\n"
+    'String parameters should be specified as is and set `string="true"`. For all other types (numbers, '
+    'booleans, arrays, objects), pass the value in JSON format and set `string="false"`.\n'
+    "\n"
+    "If thinking_mode is enabled (triggered by {thinking_start_token}), you MUST output your complete "
+    "reasoning inside {thinking_start_token}...{thinking_end_token} BEFORE any tool calls or final response.\n"
+    "\n"
+    "Otherwise, output directly after {thinking_end_token} with tool calls or final response.\n"
+    "\n"
+    "### Available Tool Schemas\n"
+    "\n"
+    "{tool_schemas}\n"
+    "\n"
+    "You MUST strictly follow the above defined tool name and parameter schemas to invoke tool calls.\n"
+)
+
+
 def _parse_thinking_effort(raw: str | None) -> str | int | None:
-    if raw is None or raw in encoding.REASONING_EFFORT_MAPPINGS:
+    if raw is None or raw in _REASONING_EFFORTS:
         return raw
     if isinstance(raw, str) and raw.isascii() and raw.isdigit() and 1 <= int(raw) <= 100:
         return int(raw)
@@ -99,18 +160,18 @@ class DeepSeekV41Codec:
         """Numeric reasoning effort written into thinking prompts (75 by default)."""
         effort = self._reasoning_effort
         if effort is None:
-            effort = encoding.DEFAULT_REASONING_EFFORT
-        return effort if isinstance(effort, int) else encoding.REASONING_EFFORT_MAPPINGS[effort]
+            effort = "high"
+        return effort if isinstance(effort, int) else _REASONING_EFFORTS[effort]
 
     def render(self, messages: list[Message], *, tools: list[ToolSpec] | None = None) -> str:
         """Render through the release encoder, including its automatic generation header."""
         if self._preserve_thinking is False:
             messages = strip_history_reasoning(messages)
-        return encoding.encode_messages(
+        return _render_messages(
             _encoder_messages(messages, tools),
-            thinking_mode="thinking" if self._thinking else "chat",
-            drop_thinking=self._preserve_thinking is not True,
-            reasoning_effort=self._reasoning_effort,
+            thinking=self._thinking,
+            preserve_thinking=self._preserve_thinking is True,
+            budget=self.reasoning_budget,
         )
 
     def encode_messages(
@@ -122,7 +183,7 @@ class DeepSeekV41Codec:
     ) -> list[int]:
         text = self.render(messages, tools=tools)
         if not add_generation_prompt and messages and messages[-1]["role"] in ("user", "tool"):
-            header = encoding.ASSISTANT_SP_TOKEN + (_THINK_OPEN if self._thinking else _THINK_CLOSE)
+            header = _ASSISTANT + (_THINK_OPEN if self._thinking else _THINK_CLOSE)
             text = text.removesuffix(header)
         return self.encode(text)
 
@@ -279,3 +340,155 @@ def _has_type(value: object, declared: str) -> bool:
         return True
     # bool is an int subclass, but is not a JSON number.
     return isinstance(value, expected) and not (isinstance(value, bool) and declared != "boolean")
+
+
+def _tool_name(name: str, namespace: str | dict | None = None) -> str:
+    if isinstance(namespace, dict):
+        namespace = namespace["name"]
+    prefix, separator, bare = name.partition("::")
+    if separator:
+        if namespace not in (None, prefix):
+            raise ValueError(f"Conflicting tool namespaces: {namespace} != {prefix}")
+        namespace, name = prefix, bare
+    if "::" in name or (namespace is not None and "::" in namespace):
+        raise ValueError(f"Invalid tool name: {name}")
+    return name if namespace is None else f"{namespace}::{name}"
+
+
+def _render_tools(tools: list[dict]) -> str:
+    functions = []
+    for tool in tools:
+        function = dict(tool["function"])
+        if tool.get("namespace") is not None:
+            function["namespace"] = tool["namespace"]
+        function["name"] = _tool_name(function["name"], function.get("namespace"))
+        namespace = function.pop("namespace", None)
+        if isinstance(namespace, dict) and namespace.get("description"):
+            function["description"] = namespace["description"] + "\n" + (function.get("description") or "")
+        functions.append(json.dumps(function, ensure_ascii=False))
+    return _TOOLS_TEMPLATE.format(
+        tool_schemas="\n".join(functions),
+        dsml_token=_DSML,
+        tc_block_name=" calls",
+        tool_call_tag_name=" invoke",
+        tool_parameter_tag_name=" parameter",
+        thinking_start_token=_THINK_OPEN,
+        thinking_end_token=_THINK_CLOSE,
+    )
+
+
+def _render_call(call: ToolCall) -> str:
+    function = call["function"]
+    name = _tool_name(function["name"], call.get("namespace") or function.get("namespace"))
+    arguments = function["arguments"]
+    for _ in range(2):
+        if not isinstance(arguments, str):
+            break
+        try:
+            arguments = json.loads(arguments)
+        except ValueError:
+            break
+    if not isinstance(arguments, dict):
+        arguments = {"arguments": function["arguments"]}
+    parameters = []
+    for key, value in arguments.items():
+        string = isinstance(value, str)
+        text = value if string else json.dumps(value, ensure_ascii=False)
+        parameters.append(f'<{_PARAMETER} name="{key}" string="{str(string).lower()}">{text}</{_PARAMETER}>')
+    return f'<{_INVOKE} name="{name}">\n' + "\n".join(parameters) + f"\n</{_INVOKE}>"
+
+
+def _merge_tool_results(messages: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    for msg in messages:
+        role = msg["role"]
+        if role == "tool":
+            blocks = [
+                {"type": "tool_result", "content": msg.get("content", ""), "tool_use_id": msg.get("tool_call_id")}
+            ]
+        elif role == "user":
+            blocks = msg.get("content_blocks")
+            if blocks is None:
+                blocks = [{"type": "text", "text": msg.get("content", "")}]
+        else:
+            merged.append(msg)
+            continue
+        if merged and merged[-1]["role"] == "user":
+            merged[-1]["content_blocks"].extend(blocks)
+        else:
+            merged.append({**msg, "role": "user", "content_blocks": list(blocks)})
+    return merged
+
+
+def _render_user(msg: dict, call_order: dict[str, int]) -> str:
+    blocks = list(msg["content_blocks"])
+    tool_results = [block for block in blocks if block["type"] == "tool_result"]
+    tool_results.sort(key=lambda block: call_order.get(block.get("tool_use_id"), 0))
+    ordered = iter(tool_results)
+    parts = []
+    for block in blocks:
+        if block["type"] == "tool_result":
+            block = next(ordered)
+            parts.append(f"<tool_result>{block.get('content', '')}</tool_result>")
+        elif block["type"] == "text":
+            parts.append(block.get("text", ""))
+        else:
+            raise ValueError(f"Unsupported DeepSeek-V4.1 content block: {block['type']}")
+    return _USER + "\n\n".join(parts)
+
+
+def _render_messages(messages: list[dict], *, thinking: bool, preserve_thinking: bool, budget: int) -> str:
+    messages = _merge_tool_results(messages)
+    keep_reasoning = preserve_thinking or any(msg.get("tools") for msg in messages)
+    last_user = max(
+        (
+            i
+            for i, msg in enumerate(messages)
+            if (msg["role"] == "system" and i > 0)
+            or (msg["role"] == "user" and any(block["type"] == "text" for block in msg["content_blocks"]))
+        ),
+        default=-1,
+    )
+    parts = [_BOS]
+    call_order: dict[str, int] = {}
+    for i, msg in enumerate(messages):
+        role = msg["role"]
+        if i == 0:
+            if thinking or role == "system":
+                parts.append(_SYSTEM)
+            if thinking:
+                parts.append(
+                    f"Reasoning Effort: {budget} "
+                    "(range 1-100, the higher the value, the more thorough the reasoning)\n\n"
+                )
+        if role == "system":
+            if i > 0:
+                parts.append(_SYSTEM)
+            parts.append(msg.get("content") or "")
+            if msg.get("tools"):
+                parts.append("\n\n" + _render_tools(msg["tools"]))
+        elif role == "user":
+            parts.append(_render_user(msg, call_order))
+        elif role == "assistant":
+            if thinking and (keep_reasoning or i > last_user):
+                parts.append((msg.get("reasoning_content") or "") + _THINK_CLOSE)
+            parts.append(msg.get("content") or "")
+            if calls := msg.get("tool_calls"):
+                parts.append(
+                    "\n\n" + _CALLS_OPEN + "\n" + "\n".join(_render_call(call) for call in calls) + "\n" + _CALLS_CLOSE
+                )
+                call_order = {
+                    call_id: j
+                    for j, call in enumerate(calls)
+                    if (call_id := call.get("id") or call["function"].get("id", ""))
+                }
+            parts.append(_EOS)
+        else:
+            raise ValueError(f"Unsupported DeepSeek-V4.1 message role: {role}")
+        if (i == len(messages) - 1 or messages[i + 1]["role"] == "assistant") and (
+            role == "user" or (role == "system" and i > 0)
+        ):
+            parts.append(
+                _ASSISTANT + (_THINK_OPEN if thinking and (keep_reasoning or i >= last_user) else _THINK_CLOSE)
+            )
+    return "".join(parts)

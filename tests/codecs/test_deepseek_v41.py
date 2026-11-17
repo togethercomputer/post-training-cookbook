@@ -15,9 +15,7 @@ from post_training_cookbook.codecs import DeepSeekV41Codec, get_codec, resolve_c
 from post_training_cookbook.codecs.deepseek_v41 import (
     DEEPSEEK_V41_REPO,
     DEEPSEEK_V41_REVISION,
-    ENCODER_SHA256,
 )
-from post_training_cookbook.codecs.vendor import deepseek_v41_encoding as encoding
 from post_training_cookbook.envs.base import Action
 from post_training_cookbook.grpo.multi_turn import flatten_episode
 from post_training_cookbook.types import Message, ToolCall, ToolCallFunction, ToolSpec
@@ -28,7 +26,6 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 _COSTUME = json.loads((_FIXTURES / "deepseek_v41_costume_renders.json").read_text())
 _EPISODES = json.loads((_FIXTURES / "deepseek_v41_cardapp_episodes.json").read_text())
 _K31_EPISODES = json.loads((_FIXTURES / "deepseek_v41_k31_cardapp_episodes.json").read_text())
-_VENDORED = Path(encoding.__file__)
 _EOS = 1
 
 _TOKENIZER_JSON_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
@@ -94,10 +91,6 @@ def _sampled(codec: DeepSeekV41Codec, prompt: list[Message], turn: Message, tool
 
 
 class TestReleaseFiles:
-    def test_vendored_encoder_is_the_release_file(self):
-        data = _VENDORED.read_bytes()
-        assert hashlib.sha256(data).hexdigest() == ENCODER_SHA256
-
     def test_tokenizer_is_the_pinned_release_file(self):
         path = hf_hub_download(DEEPSEEK_V41_REPO, "tokenizer.json", revision=DEEPSEEK_V41_REVISION)
         assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == _TOKENIZER_JSON_SHA256
@@ -119,7 +112,7 @@ class TestCostumeEpisode:
         assert hashlib.sha256(text.encode()).hexdigest() == case["text_sha256"]
         tokens = codec.encode_messages(messages, tools=self._TOOLS, add_generation_prompt=True)
         assert (len(tokens), _digest(tokens)) == (case["num_tokens"], case["token_ids_sha256"])
-        # The 1017 chat_template.jinja renders the same text on this path (dict arguments; see SOURCES.md).
+        # The 1017 chat_template.jinja renders the same text on this path (dict arguments).
         assert case["chat_template_jinja_agrees"]
 
     def test_episode_packs_into_one_sequence(self, codec: DeepSeekV41Codec):
@@ -487,7 +480,7 @@ class TestTokenizer:
 
 
 class TestReleaseChatTemplate:
-    """The release's ``chat_template.jinja`` agrees on the card-app path and differs elsewhere (SOURCES.md)."""
+    """The release template agrees on tool loops and differs on effort aliases and argument types."""
 
     @staticmethod
     def _dict_arguments(messages: list[dict]) -> list[dict]:
