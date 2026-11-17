@@ -24,10 +24,10 @@ two repos.
 
 ### Where the 1017 `chat_template.jinja` differs from this file
 
-The release has no tokenizer-config template; `chat_template.jinja` (blob `35b5c611…`) is a port of this file. The
-codec follows this file, the release's reference encoder, so the jinja deltas below do not apply to it:
+The release has no tokenizer-config template; `chat_template.jinja` (blob `35b5c611…`) is a port of this file.
+The table compares the release files; the cookbook's API adaptations are listed below.
 
-| Behaviour | `encoding.py` (the codec) | 1017 `chat_template.jinja` |
+| Behaviour | `encoding.py` | 1017 `chat_template.jinja` |
 |---|---|---|
 | Thinking mode | `thinking_mode` is required | defaults to `thinking`; `thinking` and `enable_thinking` are aliases; `reasoning_effort="none"` turns thinking off |
 | Reasoning effort | int 1–100, or `low`/`high`/`max` (50/75/100); anything else asserts | also `none`/`minimal`/`medium`/`xhigh`, mapped to 75/50/75/75 (V4.1-Flash's jinja mapped `medium` to 62) |
