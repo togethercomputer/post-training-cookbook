@@ -47,6 +47,7 @@ _MODELS = list(REFERENCE_MODELS.values())
 # Whether a family's template renders history reasoning without preserve_thinking. Either way
 # split_turns copes; preserve_thinking must keep it for every family.
 _KEEPS_HISTORY_REASONING: dict[str, bool] = {
+    REFERENCE_MODELS["deepseek-v4.1-flash"]: False,
     REFERENCE_MODELS["qwen3.5"]: False,
     _GLM5: True,
     REFERENCE_MODELS["kimi-k3"]: True,
@@ -566,6 +567,7 @@ def test_instruct_mode_changes_the_gen_prompt(model: str):
 # three — `<|endoftext|>` ends the conversation, `<|user|>` yields back to the user,
 # `<|observation|>` hands off to a tool — where Qwen declares one universal `<|im_end|>`.
 _STOP_TOKENS: dict[str, tuple[str, ...]] = {
+    REFERENCE_MODELS["deepseek-v4.1-flash"]: ("<｜end▁of▁sentence｜>",),
     REFERENCE_MODELS["qwen3.5"]: ("<|im_end|>",),
     _GLM5: ("<|endoftext|>", "<|user|>", "<|observation|>"),
     # Kimi-K3 ends every message, assistant turns included, with `<|end_of_msg|>`.
@@ -598,6 +600,7 @@ def test_every_trained_turn_ends_on_a_stop_token(model: str):
 # The effort levels each family's template renders, and the one it renders by default. Pinned so a
 # template bump cannot silently change how much of the token budget every rollout spends.
 _THINKING_EFFORTS: dict[str, tuple[tuple[str, ...], str | None]] = {
+    REFERENCE_MODELS["deepseek-v4.1-flash"]: (("low", "high", "max"), "high"),
     REFERENCE_MODELS["qwen3.5"]: ((), None),
     _GLM5: (("low", "high", "max"), "max"),
     REFERENCE_MODELS["kimi-k3"]: (("low", "high", "max"), "max"),

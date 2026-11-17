@@ -35,6 +35,9 @@ override-dependencies = ["transformers>=5.10.0,<6", "filelock>=4.2.1,<5"]
 [tool.ruff]
 line-length = 119
 target-version = "py311"
+# Keep the upstream encoder byte-for-byte; provenance is in codecs/vendor/SOURCES.md.
+extend-exclude = ["post_training_cookbook/codecs/vendor/deepseek_v41_encoding.py"]
+force-exclude = true
 
 [tool.ruff.format]
 quote-style = "double"
