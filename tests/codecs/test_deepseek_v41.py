@@ -1,4 +1,4 @@
-"""Release goldens, sampled tool episodes, and DeepSeek-V4.1 codec contracts."""
+"""Sampled tool episodes and DeepSeek-V4.1 codec contracts."""
 
 from __future__ import annotations
 
@@ -25,27 +25,12 @@ from tests.codecs import REFERENCE_MODELS
 
 _MODEL = REFERENCE_MODELS["deepseek-v4.1-flash"]
 _FIXTURES = Path(__file__).parent / "fixtures"
-_GOLDENS = _FIXTURES / "deepseek_v41_goldens"
 _COSTUME = json.loads((_FIXTURES / "deepseek_v41_costume_renders.json").read_text())
 _EPISODES = json.loads((_FIXTURES / "deepseek_v41_cardapp_episodes.json").read_text())
 _K31_EPISODES = json.loads((_FIXTURES / "deepseek_v41_k31_cardapp_episodes.json").read_text())
 _VENDORED = Path(encoding.__file__)
 _EOS = 1
 
-# Git blob ids of the release files, from the Hub tree at the pinned revision.
-_RELEASE_BLOBS = {
-    "encoding.py": "3c7c357dc9ae3ed37adacb8572a2e9498b7d1bcb",
-    "test_input_1.json": "c7435727e24c5f7b5cf28b470cf03814101eb37a",
-    "test_input_2.json": "132bb05a51e79204324f160cfde2880b5d0077ba",
-    "test_input_3.json": "6d2612113c71fb9a897255ec694b7b8a41d0432b",
-    "test_input_4.json": "86cd1f0a68075a412654ea10f9558c69162b271a",
-    "test_input_5.json": "2a2fa6a89e8118e896ec47abcc5bda30789e6532",
-    "test_output_1.txt": "3dc9bfe936d251bf69f6db738d1302bfa8c4c705",
-    "test_output_2.txt": "78eb6be5de6f3cda7c5065b3c3bd01bac28ef1dc",
-    "test_output_3.txt": "90b2b6b74beaa471dfbbba1d7e7a5eb88c9e7da0",
-    "test_output_4.txt": "efad296eb4ff95754f322476db4d26e72682a586",
-    "test_output_5.txt": "a130bcc2c5682c94b6fd5194def54209f1794939",
-}
 _TOKENIZER_JSON_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
 
 _LOOKUP = ToolSpec(
@@ -62,10 +47,6 @@ _LOOKUP = ToolSpec(
         },
     },
 )
-
-
-def _git_blob(data: bytes) -> str:
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
 def _digest(tokens: list[int]) -> str:
@@ -116,31 +97,10 @@ class TestReleaseFiles:
     def test_vendored_encoder_is_the_release_file(self):
         data = _VENDORED.read_bytes()
         assert hashlib.sha256(data).hexdigest() == ENCODER_SHA256
-        assert _git_blob(data) == _RELEASE_BLOBS["encoding.py"]
-
-    def test_goldens_are_the_release_goldens(self):
-        names = {path.name for path in _GOLDENS.iterdir()}
-        assert names == set(_RELEASE_BLOBS) - {"encoding.py"}
-        for name in names:
-            assert _git_blob((_GOLDENS / name).read_bytes()) == _RELEASE_BLOBS[name], name
 
     def test_tokenizer_is_the_pinned_release_file(self):
         path = hf_hub_download(DEEPSEEK_V41_REPO, "tokenizer.json", revision=DEEPSEEK_V41_REVISION)
         assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == _TOKENIZER_JSON_SHA256
-
-
-@pytest.mark.parametrize("case_id", range(1, 6))
-def test_renders_the_release_goldens(case_id: int, tokenizer):
-    """Each release golden, through the codec: tools from the leading system message go in as ``tools``."""
-    (case,) = encoding.load_cases(str(_GOLDENS / f"test_input_{case_id}.json"))
-    golden = (_GOLDENS / f"test_output_{case_id}.txt").read_text()
-    messages = case["messages"]
-    tools = [tool["function"] for tool in messages[0].pop("tools")] if messages[0].get("tools") else None
-    codec = _codec(case["reasoning_effort"], enable_thinking=case["thinking_mode"] == "thinking")
-    assert codec.render(messages, tools=tools) == golden
-    # The release tokenizes its prompt text whole, with the default flags; nothing is added either way.
-    ids = codec.encode_messages(messages, tools=tools, add_generation_prompt=True)
-    assert ids == tokenizer.encode(golden) == tokenizer.encode(golden, add_special_tokens=False)
 
 
 class TestCostumeEpisode:

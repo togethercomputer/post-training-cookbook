@@ -2,7 +2,7 @@
 
 Files here are byte-for-byte copies of a model release's own encoder. Never edit or reformat them: ruff excludes each
 encoder file, and a test pins each file's sha256. To update one, copy the new release file unchanged, update its row
-here and the pinned hash, and re-run the codec's goldens.
+here and the pinned hash, and re-run the codec tests.
 
 ## `deepseek_v41_encoding.py`
 
