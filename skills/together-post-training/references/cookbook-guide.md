@@ -150,7 +150,7 @@ Unknown keys in the YAML file raise `ValueError`.
 |---|---|---|---|
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. `None` uses the model's default. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template. `True` keeps `<think>` blocks in history (requires `enable_thinking != False`). `False` strips them; on GLM-5 (as `clear_thinking`), Qwen3.6 and Qwen3.8 it is forwarded to the template, and GLM-5's and Qwen3.8's keep history when the flag is omitted. See [Core concepts: codecs](./concepts.md#codecs). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). DeepSeek-V4.1 accepts `low`/`high`/`max` (default `high`) or a string integer 1–100. `None` keeps the template default; other families reject any value. |
 
 #### Policy objective
 
@@ -294,7 +294,7 @@ config = SFTConfig(
 | `train_on_what` | `str` | `"all_assistant_messages"` | `"all_assistant_messages"` or `"last_assistant_message"`. Use the `TRAIN_ON_ALL` and `TRAIN_ON_LAST` constants exported from `post_training_cookbook.sft.train`; other values are rejected. |
 | `enable_thinking` | `bool \| None` | `None` | On/off switch for the model's `<think>` output. |
 | `preserve_thinking` | `bool \| None` | `None` | `None` keeps the stock template; `True` keeps history reasoning; `False` strips it (see [codecs](./concepts.md#codecs)). |
-| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). `None` keeps the template default; other families reject any value. |
+| `thinking_effort` | `str \| None` | `None` | Thinking-effort level for GLM-5 and Kimi-K3 (`low`/`high`/`max`, default `max`) and Muse Spark (`low`/`medium`/`high`/`xhigh`, default `xhigh`). DeepSeek-V4.1 accepts `low`/`high`/`max` (default `high`) or a string integer 1–100. `None` keeps the template default; other families reject any value. |
 | `use_lora` | `bool` | `True` | LoRA vs full-weight. Allowed modes: [supported-models discovery](./sdk-reference.md#supported-models-and-gpu-hardware). See `recipes/sft/no_robots_full.py`. |
 | `lora_rank` | `int \| None` | `None` | LoRA rank when `use_lora=True`. `None` defers to the platform default. |
 | `lora_alpha` | `int \| None` | `None` | LoRA scaling factor when `use_lora=True`. `None` defers to the platform default. |
@@ -610,7 +610,7 @@ codec = get_codec(
     hf_token="...",
     enable_thinking=None,        # None = model default; True/False to force
     preserve_thinking=None,      # None = stock template; True keeps <think> in history
-    thinking_effort=None,        # None = template default; GLM-5 / Kimi-K3 / Muse Spark only
+    thinking_effort=None,        # None = model family default
 )
 
 # Encode raw text without chat-template wrapping
@@ -638,6 +638,7 @@ message, parse_ok = codec.parse_response(response_tokens)
 - `minimax-m3` → `MiniMaxM3Codec` (for example, `MiniMaxAI/MiniMax-M3`). Its template omits a `null` tool-call argument, so a parsed call has no such key.
 - `muse-spark-open` → `MuseSparkCodec` (`meta-models/Muse-Spark-Open-816B-A42B`). The checkpoint repo is gated on the Hugging Face Hub, so loading its tokenizer needs an `hf_token` whose account has been granted access.
 - `nvidia-nemotron-3.5-super-vl` → `Nemotron35Codec` (`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16` and its other precisions; other Nemotron 3.5 models are not supported). It renders with the checkpoint's own template at a pinned revision and parses the Qwen3.5 XML tool-call body. Thinking is on by default, so SFT on data without reasoning needs `enable_thinking=False`. `thinking_effort="medium"` adds the template's efficient-reasoning hint to the last user message, with thinking on or off, and so splits a multi-turn episode at every user message; `"high"` is the default. To serve a model trained with `"medium"` on the same prompts, chat-completions requests must send `chat_template_kwargs={"medium_effort": true}`; SGLang does not map `reasoning_effort="medium"` to it for this template.
+- `deepseek-v4.1-flash` → `DeepSeekV41Codec` (`deepseek-ai/DeepSeek-V4.1-Flash-1017` and V4.1-Flash). It renders through the release's own chat template from the pinned tokenizer. Only string message content is supported; content blocks and multimodal inputs raise `ValueError`. Thinking defaults to `high` (75); `thinking_effort` accepts `low`/`high`/`max` or a string integer 1–100. Tool loops keep reasoning in history; without tools, use `preserve_thinking=True` to retain earlier turns. Set `enable_thinking=False` for SFT data without reasoning.
 
 The registered prefixes in `post_training_cookbook/codecs/__init__.py` are the source of truth. An unrecognized model raises `ValueError`. To add a new model family, implement the `MessageCodec` protocol and register it in `post_training_cookbook/codecs/__init__.py`.
 
