@@ -12,6 +12,7 @@ import re
 import pytest
 
 from post_training_cookbook.codecs import (
+    DeepSeekV41Codec,
     Glm5Codec,
     KimiK3Codec,
     MiniMaxM3Codec,
@@ -656,6 +657,8 @@ class TestCodecRouting:
     @pytest.mark.parametrize(
         "model, expected",
         [
+            ("deepseek-ai/DeepSeek-V4.1-Flash-1017", DeepSeekV41Codec),
+            ("deepseek-ai/DeepSeek-V4.1-Flash", DeepSeekV41Codec),
             ("Qwen/Qwen3.5-35B-A3B", Qwen35Codec),
             ("Qwen/Qwen3.6-35B-A3B", Qwen35Codec),
             ("Qwen/Qwen3.8-27B", Qwen35Codec),
@@ -677,6 +680,8 @@ class TestCodecRouting:
         "model",
         [
             "meta-llama/Llama-3-8B",
+            "deepseek-ai/DeepSeek-V4-Flash",
+            "deepseek-ai/DeepSeek-V4.1-Pro",
             # GLM-4 uses a different tool-call body grammar, and GLM-5.2 a template Glm5Codec
             # does not model, so neither may route to it.
             "zai-org/GLM-4.6",
