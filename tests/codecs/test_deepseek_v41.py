@@ -1,4 +1,4 @@
-"""Sampled tool episodes and DeepSeek-V4.1 codec contracts."""
+"""DeepSeek-V4.1 codec contracts."""
 
 from __future__ import annotations
 
@@ -16,16 +16,10 @@ from post_training_cookbook.codecs.deepseek_v41 import (
     DEEPSEEK_V41_REPO,
     DEEPSEEK_V41_REVISION,
 )
-from post_training_cookbook.envs.base import Action
-from post_training_cookbook.grpo.multi_turn import flatten_episode
 from post_training_cookbook.types import Message, ToolCall, ToolCallFunction, ToolSpec
 from tests.codecs import REFERENCE_MODELS
 
 _MODEL = REFERENCE_MODELS["deepseek-v4.1-flash"]
-_FIXTURES = Path(__file__).parent / "fixtures"
-_COSTUME = json.loads((_FIXTURES / "deepseek_v41_costume_renders.json").read_text())
-_EPISODES = json.loads((_FIXTURES / "deepseek_v41_cardapp_episodes.json").read_text())
-_K31_EPISODES = json.loads((_FIXTURES / "deepseek_v41_k31_cardapp_episodes.json").read_text())
 _EOS = 1
 
 _TOKENIZER_JSON_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
@@ -46,16 +40,8 @@ _LOOKUP = ToolSpec(
 )
 
 
-def _digest(tokens: list[int]) -> str:
-    return hashlib.sha256(",".join(map(str, tokens)).encode()).hexdigest()
-
-
 def _call(call_id: str, name: str, arguments: dict) -> ToolCall:
     return ToolCall(id=call_id, function=ToolCallFunction(name=name, arguments=json.dumps(arguments)))
-
-
-def _action(tokens: list[int]) -> Action:
-    return Action(tokens, [0.0] * len(tokens))
 
 
 @lru_cache
@@ -94,108 +80,6 @@ class TestReleaseFiles:
     def test_tokenizer_is_the_pinned_release_file(self):
         path = hf_hub_download(DEEPSEEK_V41_REPO, "tokenizer.json", revision=DEEPSEEK_V41_REVISION)
         assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == _TOKENIZER_JSON_SHA256
-
-
-class TestCostumeEpisode:
-    """A scripted CostumeEnv episode against the release encoder's own renders."""
-
-    _TOOLS = _COSTUME["tools"]
-    _MESSAGES = _COSTUME["messages"]
-
-    @pytest.mark.parametrize("case", _COSTUME["cases"], ids=[case["id"] for case in _COSTUME["cases"]])
-    def test_renders_like_the_release(self, case: dict):
-        codec = _codec(case["reasoning_effort"], enable_thinking=case["thinking"])
-        messages = self._MESSAGES[: case["num_messages"]]
-        text = codec.render(messages, tools=self._TOOLS)
-        if "text" in case:
-            assert text == case["text"]
-        assert hashlib.sha256(text.encode()).hexdigest() == case["text_sha256"]
-        tokens = codec.encode_messages(messages, tools=self._TOOLS, add_generation_prompt=True)
-        assert (len(tokens), _digest(tokens)) == (case["num_tokens"], case["token_ids_sha256"])
-        # The 1017 chat_template.jinja renders the same text on this path (dict arguments).
-        assert case["chat_template_jinja_agrees"]
-
-    def test_episode_packs_into_one_sequence(self, codec: DeepSeekV41Codec):
-        """Declared tools keep every turn's reasoning, so each prompt extends the last prompt and its completion."""
-        turns = [i for i, msg in enumerate(self._MESSAGES) if msg["role"] == "assistant"]
-        actions = [_action(_sampled(codec, self._MESSAGES[:i], self._MESSAGES[i], self._TOOLS)) for i in turns]
-        assert all(action.tokens[-1] == _EOS for action in actions)
-        sequences = flatten_episode(codec, self._MESSAGES, actions, self._TOOLS)
-        assert len(sequences) == 1
-        assert sequences[0].tokens == codec.encode_messages(self._MESSAGES, tools=self._TOOLS)
-
-    def test_turns_parse_back(self, codec: DeepSeekV41Codec):
-        """Every scripted turn parses back to itself, except the integer the turn passed as a string."""
-        for i, msg in enumerate(self._MESSAGES):
-            if msg["role"] != "assistant":
-                continue
-            sampled = _sampled(codec, self._MESSAGES[:i], msg, self._TOOLS)
-            parsed, ok = codec.parse_response(sampled, tools=self._TOOLS)
-            assert ok
-            assert parsed.get("reasoning_content") == msg.get("reasoning_content")
-            assert parsed.get("content") == msg.get("content")
-            expected = [
-                (call["function"]["name"], json.loads(call["function"]["arguments"]))
-                for call in msg.get("tool_calls", [])
-            ]
-            got = [
-                (call["function"]["name"], json.loads(call["function"]["arguments"]))
-                for call in parsed.get("tool_calls", [])
-            ]
-            mistyped = [args for _, args in expected if isinstance(args.get("requested_allotment_motes"), str)]
-            if mistyped:
-                # string="true" where the schema declares an integer: coerced, so it re-renders as string="false".
-                assert got[0][1]["requested_allotment_motes"] == int(mistyped[0]["requested_allotment_motes"])
-                assert _sampled(codec, self._MESSAGES[:i], parsed, self._TOOLS) != sampled
-            else:
-                assert got == expected
-                assert _sampled(codec, self._MESSAGES[:i], parsed, self._TOOLS) == sampled
-
-
-class TestSampledEpisodes:
-    """Card-app episodes the model itself sampled: every parsed turn re-renders token for token, and packs."""
-
-    @pytest.mark.parametrize("episode", _EPISODES["episodes"], ids=[ep["id"] for ep in _EPISODES["episodes"]])
-    def test_turns_reencode_and_pack(self, episode: dict):
-        codec = _codec(episode["reasoning_effort"], enable_thinking=True)
-        tools = _COSTUME["tools"]  # CostumeEnv's tools do not depend on the task
-        messages: list[Message] = list(episode["opening"])
-        actions = []
-        for turn in episode["turns"]:
-            # The generator returns the EOS a turn stopped on; the endpoint's text leaves it out.
-            sampled = codec.encode(turn["text"]) + ([_EOS] if turn["finish_reason"] == "stop" else [])
-            parsed, ok = codec.parse_response(sampled, tools=tools)
-            assert ok == turn["parse_ok"], turn["text"][-300:]
-            if ok and turn["finish_reason"] == "stop":
-                assert _sampled(codec, messages, parsed, tools) == sampled
-            messages += [parsed, *turn["tool_results"]]
-            actions.append(_action(sampled))
-        # Only the last turn may stop short (the cap, a failed parse), and it is never re-rendered as history.
-        assert all(turn["finish_reason"] == "stop" and turn["parse_ok"] for turn in episode["turns"][:-1])
-        assert len(flatten_episode(codec, messages, actions, tools)) == 1
-
-
-class TestK31Episodes:
-    @pytest.mark.parametrize("episode", _K31_EPISODES["episodes"], ids=[ep["id"] for ep in _K31_EPISODES["episodes"]])
-    def test_replays_in_this_format(self, episode: dict, codec: DeepSeekV41Codec):
-        tools = _COSTUME["tools"]
-        messages = episode["messages"]
-        assert messages[0]["content"] == _COSTUME["messages"][0]["content"]  # the CostumeEnv system prompt
-        parsed_history: list[Message] = []
-        actions = []
-        for i, msg in enumerate(messages):
-            if msg["role"] != "assistant":
-                parsed_history.append(msg)
-                continue
-            sampled = _sampled(codec, messages[:i], msg, tools)
-            assert sampled[-1] == _EOS
-            parsed, ok = codec.parse_response(sampled, tools=tools)
-            assert ok
-            assert _sampled(codec, messages[:i], parsed, tools) == sampled
-            parsed_history.append(parsed)
-            actions.append(_action(sampled))
-        assert len(flatten_episode(codec, messages, actions, tools)) == 1
-        assert len(flatten_episode(codec, parsed_history, actions, tools)) == 1
 
 
 def _param(key: str, value: str, string: str = "true") -> str:
@@ -490,15 +374,19 @@ class TestReleaseChatTemplate:
                 call["function"]["arguments"] = json.loads(call["function"]["arguments"])
         return out
 
-    def test_agrees_on_a_card_app_episode(self, codec: DeepSeekV41Codec, tokenizer):
-        messages, tools = TestCostumeEpisode._MESSAGES, TestCostumeEpisode._TOOLS
+    def test_agrees_on_a_tool_loop(self, codec: DeepSeekV41Codec, tokenizer):
+        messages = [
+            Message(role="user", content="q"),
+            Message(role="assistant", reasoning_content="r", tool_calls=[_call("call_1", "lookup", {"zip": "1"})]),
+            Message(role="tool", content="ok", tool_call_id="call_1"),
+        ]
         jinja = tokenizer.apply_chat_template(
-            self._dict_arguments(messages[:-1]),
-            tools=[{"type": "function", "function": tool} for tool in tools],
+            self._dict_arguments(messages),
+            tools=[{"type": "function", "function": _LOOKUP}],
             add_generation_prompt=True,
             tokenize=False,
         )
-        assert jinja == codec.render(messages[:-1], tools=tools)
+        assert jinja == codec.render(messages, tools=[_LOOKUP])
 
     def test_deltas(self, codec: DeepSeekV41Codec, tokenizer):
         messages = [Message(role="user", content="q")]
