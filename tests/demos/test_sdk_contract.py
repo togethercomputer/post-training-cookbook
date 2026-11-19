@@ -24,9 +24,7 @@ REQUIRED_BY_DEMOS = {
     ),
 }
 
-# The demos skip checkpointing, but the wrapper maps these. The migration guide lists them as well
-# (https://docs.together.ai/docs/post-training/migrate-from-tinker), though it still says the two
-# create_training_client_from_state methods have no _async variant; they do since SDK 3.3.0.
+# The demos skip checkpointing, but the wrapper maps these.
 CHECKPOINTING = {
     "ServiceClient": (
         "create_training_client_from_state",
@@ -37,8 +35,8 @@ CHECKPOINTING = {
     "TrainingClient": ("save_state", "save_state_async", "save_weights_for_sampler", "save_weights_for_sampler_async"),
 }
 
-# The migration guide lists these as not mapped. Assert their absence, otherwise the claim rots silently
-# once the wrapper grows the methods.
+# The migration guide (https://docs.together.ai/docs/post-training/migrate-from-tinker) lists these as not
+# mapped. Assert their absence, otherwise the claim rots silently once the wrapper grows the methods.
 UNSUPPORTED = {
     "ServiceClient": ("create_sampling_client",),
     "TrainingClient": ("load_state", "load_state_with_optimizer", "create_sampling_client"),

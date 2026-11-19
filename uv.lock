@@ -2547,7 +2547,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = "~=1.2" },
     { name = "pyyaml", specifier = "~=6.0" },
     { name = "tiktoken", specifier = "~=0.14" },
-    { name = "together", specifier = ">=3.0.0,<4" },
+    { name = "together", specifier = ">=3.3.0,<4" },
     { name = "torch", specifier = "~=2.13" },
     { name = "transformers", specifier = ">=5.10.0,<6" },
     { name = "wandb", specifier = "~=0.25" },
@@ -2563,7 +2563,7 @@ dev = [
 notebooks = [{ name = "ipykernel", specifier = "~=6.30" }]
 tinker = [
     { name = "tinker-cookbook", extras = ["math-rl"], specifier = ">=0.6.1" },
-    { name = "together", extras = ["tinker"], specifier = ">=3.3.0" },
+    { name = "together", extras = ["tinker"] },
 ]
 
 [[package]]
