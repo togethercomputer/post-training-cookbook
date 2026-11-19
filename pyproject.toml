@@ -25,7 +25,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = ["pytest", "pytest-asyncio", "ruff==0.14.9", "pre-commit"]
 notebooks = ["ipykernel~=6.30"]
-tinker = ["tinker-cookbook[math-rl]", "together[tinker]"]
+tinker = ["tinker-cookbook[math-rl]>=0.6.1", "together[tinker]>=3.3.0"]
 
 [tool.uv]
 # tinker-cookbook caps transformers<=5.5.4; override to pick up security fixes (GHSA-xrqw-3rrv-vx5w).
