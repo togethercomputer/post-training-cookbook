@@ -13,12 +13,13 @@ the SFT target).
    letters are under 70% in the target script.
 4. Mix in the Thai rows. Trained on Lao alone, the student starts answering some Thai prompts in
    Lao; Thai chrF++ slipped from 46.7 to 44.3 over three epochs.
-5. Train: LoRA rank 64, 2 epochs (about 600 steps at batch 16). Lao and Thai (300 sentences each)
-   are scored on the generator every 50 steps, and the full 1,012-sentence Lao devtest at the
-   start and end.
+5. Train: LoRA rank 64, 2 epochs (about 600 steps at batch 16), on a resource with no generator
+   replica. To evaluate the student, deploy the final inference checkpoint with Dedicated Model
+   Inference (https://docs.together.ai/docs/dedicated-endpoints/configs) and score it there.
 
-Our run reached 44.3 chrF++ on Lao (93% of the teacher), 100% Lao script, and 47.8 on Thai. It
-took about 46 minutes of GPU time ($55 at $72/h) and $9 of Kimi-K3.1-Pro calls.
+Our run reached 44.3 chrF++ on the full 1,012-sentence Lao devtest (93% of the teacher), 100% Lao
+script, and 47.8 on Thai, with $9 of Kimi-K3.1-Pro calls. That run also kept a generator to score the
+student while it trained ($72/h); this recipe trains without one, at about half the hourly price.
 
 Requires TOGETHER_API_KEY. Wikipedia sentences are streamed from Hugging Face on the first run.
 
@@ -32,15 +33,9 @@ from dotenv import load_dotenv
 
 from post_training_cookbook.distillation.config import DistillConfig
 from post_training_cookbook.distillation.data import mix, write_jsonl
-from post_training_cookbook.distillation.evaluate import EvalSet, score_answered, teacher_outputs
 from post_training_cookbook.distillation.teacher import TeacherConfig
 from post_training_cookbook.distillation.train import train
-from post_training_cookbook.distillation.translation import (
-    cached_sentences,
-    english_sources,
-    translation_eval_set,
-    translation_rows,
-)
+from post_training_cookbook.distillation.translation import cached_sentences, english_sources, translation_rows
 
 CACHE_DIR = Path("_dev/distillation")
 # Shared with multilingual_from_kimi_k31_pro.py: Lao uses the first 3,000, Thai the last 1,000.
@@ -72,8 +67,6 @@ config = DistillConfig(
     lora_rank=64,
     lora_alpha=128,
     max_length=2048,
-    eval_interval=50,
-    eval_max_tokens=1024,
     wandb_project=None,
 )
 
@@ -88,27 +81,9 @@ def training_rows() -> list[dict[str, Any]]:
     return mix(lao, thai, seed=config.seed)
 
 
-def eval_sets() -> list[EvalSet]:
-    return [
-        translation_eval_set("lao_Laoo", 300, name="lao"),
-        translation_eval_set("tha_Thai", 300, name="thai"),
-        translation_eval_set("lao_Laoo", None, name="lao_full", every_eval=False),
-    ]
-
-
 if __name__ == "__main__":
     load_dotenv(override=True)
     rows = training_rows()
     write_jsonl(CACHE_DIR / "sft_lao_thai.jsonl", rows)
-    sets = eval_sets()
-    # The teacher's score on the same sentences is the target the student is chasing.
-    teacher_scores = {
-        s.name: score_answered(s, teacher_outputs(s.items, teacher, TEACHER_CACHE / "eval.jsonl")) for s in sets
-    }
-
-    result = train(config, rows, sets)
-
-    print(f"\n{'eval set':<10} {'student':>8} {'teacher':>8}")
-    for name, metrics in result.eval_metrics.items():
-        print(f"{name:<10} {metrics['chrf']:8.1f} {teacher_scores[name].get('chrf', float('nan')):8.1f}")
+    result = train(config, rows)
     print(f"Run artifacts: {result.run_dir}; inference checkpoint: {result.inference_checkpoint}")

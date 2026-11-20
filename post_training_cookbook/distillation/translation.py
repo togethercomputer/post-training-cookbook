@@ -230,8 +230,6 @@ def translation_rows(
     return rows
 
 
-def translation_eval_set(
-    lang: str, n: int | None = 300, *, name: str | None = None, every_eval: bool = True
-) -> EvalSet:
+def translation_eval_set(lang: str, n: int | None = 300, *, name: str | None = None) -> EvalSet:
     """English-to-``lang`` FLORES-200 devtest sentences as an :class:`EvalSet`, scored with chrF++."""
-    return EvalSet(name=name or lang, items=eval_items(lang, n), metrics=translation_metrics, every_eval=every_eval)
+    return EvalSet(name=name or lang, items=eval_items(lang, n), metrics=translation_metrics)

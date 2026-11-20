@@ -25,9 +25,9 @@ def _exact(items, outputs):
     return {"accuracy": sum(o == "a" for o in outputs) / len(items)}
 
 
-def _eval_set(name: str, every_eval: bool = True) -> EvalSet:
+def _eval_set(name: str) -> EvalSet:
     items = [{"id": f"{name}:{i}", "messages": [{"role": "user", "content": f"q{i}"}]} for i in range(3)]
-    return EvalSet(name=name, items=items, metrics=_exact, every_eval=every_eval)
+    return EvalSet(name=name, items=items, metrics=_exact)
 
 
 def _stub_remote(monkeypatch, tmp_path):
@@ -63,40 +63,16 @@ def test_step_budget(monkeypatch, tmp_path, num_epochs, max_steps, expected) -> 
     assert session.trainer.optim_step.call_count == expected
 
 
-def test_evals_run_at_step_zero_each_interval_and_the_end_after_a_sync(monkeypatch, tmp_path) -> None:
-    session, _, events = _stub_remote(monkeypatch, tmp_path)
-    config = DistillConfig(model="org/M", batch_size=2, num_epochs=1.0, eval_interval=2)  # 5 steps
+def test_training_provisions_no_generator_and_never_samples(monkeypatch, tmp_path) -> None:
+    session, factory, events = _stub_remote(monkeypatch, tmp_path)
 
-    result = train.train(config, ROWS, [_eval_set("lao"), _eval_set("full", every_eval=False)])
+    result = train.train(DistillConfig(model="org/M", batch_size=2, num_epochs=1.0), ROWS)
 
-    # Step 0 scores everything; steps 2 and 4 only the every-eval set; step 5 (last) everything.
-    assert events == [
-        ("eval", "lao"),
-        ("eval", "full"),
-        ("sync",),
-        ("eval", "lao"),
-        ("sync",),
-        ("eval", "lao"),
-        ("sync",),
-        ("eval", "lao"),
-        ("eval", "full"),
-    ]
-    assert result.eval_metrics == {
-        "lao": {"accuracy": 1.0, "truncated_rate": 0.0},
-        "full": {"accuracy": 1.0, "truncated_rate": 0.0},
-    }
-    assert result.inference_checkpoint == "ckpt-1"
-    assert (tmp_path / "eval_full_step0005.json").exists()
-    assert not (tmp_path / "eval_full_step0002.json").exists()
-
-
-def test_no_eval_sets_means_no_weight_syncs(monkeypatch, tmp_path) -> None:
-    session, _, events = _stub_remote(monkeypatch, tmp_path)
-
-    train.train(DistillConfig(model="org/M", batch_size=2, num_epochs=1.0, eval_interval=1), ROWS)
-
-    assert events == []
+    assert factory.call_args.kwargs["num_generator_replicas"] == 0
     session.trainer.weights_sync.assert_not_called()
+    assert events == []
+    assert result.inference_checkpoint == "ckpt-1"
+    assert result.run_dir == tmp_path
 
 
 def test_loss_is_logged_per_trained_token(monkeypatch, tmp_path) -> None:
@@ -127,14 +103,6 @@ def test_too_few_rows_for_a_batch_fail_before_provisioning(monkeypatch, tmp_path
     factory.assert_not_called()
 
 
-def test_eval_sets_need_a_generator(monkeypatch, tmp_path) -> None:
-    _, factory, _ = _stub_remote(monkeypatch, tmp_path)
-
-    with pytest.raises(ValueError, match="num_generator_replicas"):
-        train.train(DistillConfig(model="org/M", batch_size=2, num_generator_replicas=0), ROWS, [_eval_set("lao")])
-    factory.assert_not_called()
-
-
 def test_evaluate_student_scores_the_base_model(monkeypatch, tmp_path) -> None:
     session, factory, events = _stub_remote(monkeypatch, tmp_path)
 
@@ -143,7 +111,8 @@ def test_evaluate_student_scores_the_base_model(monkeypatch, tmp_path) -> None:
     assert scores == {"lao": {"accuracy": 1.0, "truncated_rate": 0.0}}
     assert events == [("eval", "lao")]
     session.trainer.optim_step.assert_not_called()
-    factory.assert_called_once()
+    # Sampling needs a generator; an attached resource without one is rejected by training_session.
+    assert factory.call_args.kwargs["num_generator_replicas"] == 1
 
 
 def test_student_outputs_parse_responses_and_flag_truncation() -> None:
@@ -194,8 +163,6 @@ def test_teacher_outputs_map_failures_to_none(monkeypatch, tmp_path) -> None:
 def test_config_validation() -> None:
     with pytest.raises(ValueError, match="num_epochs"):
         DistillConfig(model="m", num_epochs=0)
-    with pytest.raises(ValueError, match="eval_interval"):
-        DistillConfig(model="m", eval_interval=0)
     with pytest.raises(ValueError, match="max_steps"):
         DistillConfig(model="m", max_steps=0)
     with pytest.raises(ValueError, match="use_lora=False"):

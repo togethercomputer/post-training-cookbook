@@ -1,9 +1,9 @@
-"""Score a student session or the teacher on the same eval items.
+"""Score the base student or the teacher on the same eval items.
 
 An eval item is a dict with at least ``"id"`` and ``"messages"`` (the prompt). An :class:`EvalSet`
 pairs items with a metrics function over ``(items, outputs)``, where ``outputs`` are the final
-response texts in item order. The student is sampled on its session's generator, so call
-``session.trainer.weights_sync()`` first if the trainer has stepped since the last sync.
+response texts in item order. The student is sampled on a session's generator; the teacher through
+its serverless endpoint.
 """
 
 from __future__ import annotations
@@ -23,15 +23,11 @@ Metrics = Callable[[Sequence[dict[str, Any]], Sequence[str]], dict[str, float]]
 
 @dataclass(frozen=True)
 class EvalSet:
-    """Held-out items and how to score them.
-
-    ``every_eval=False`` scores the set only at step 0 and at the last step, for a large final set.
-    """
+    """Held-out items and how to score them."""
 
     name: str
     items: Sequence[dict[str, Any]]
     metrics: Metrics
-    every_eval: bool = True
 
 
 def student_outputs(

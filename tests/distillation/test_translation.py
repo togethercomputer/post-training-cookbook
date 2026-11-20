@@ -93,12 +93,9 @@ def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_pa
     assert rows[0]["messages"][-1] == {"role": "assistant", "content": LAO[0]}
 
 
-def test_translation_eval_set_names_and_cadence() -> None:
-    every = translation.translation_eval_set("lao_Laoo", 2, name="lao")
-    final = translation.translation_eval_set("lao_Laoo", None, name="lao_full", every_eval=False)
-
-    assert (every.name, len(every.items), every.every_eval) == ("lao", 2, True)
-    assert (final.name, len(final.items), final.every_eval) == ("lao_full", 3, False)
+def test_translation_eval_set_names() -> None:
+    assert translation.translation_eval_set("lao_Laoo", 2, name="lao").name == "lao"
+    assert len(translation.translation_eval_set("lao_Laoo", None).items) == 3
     assert translation.translation_eval_set("lao_Laoo", 1).name == "lao_Laoo"
 
 

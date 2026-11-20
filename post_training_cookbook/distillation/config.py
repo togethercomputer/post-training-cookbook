@@ -16,9 +16,6 @@ class DistillConfig:
     # the base model — leave `model` unset in that case).
     model: str | None = None
     model_resources_id: str | None = None
-    # Evaluation samples on the resource's generator, so keep at least one replica.
-    # Provisioning only; an attached resource keeps its own replica count.
-    num_generator_replicas: int = 1
 
     batch_size: int = 16
     # Epochs over the rendered samples; fractional values train part of an epoch.
@@ -37,10 +34,8 @@ class DistillConfig:
     preserve_thinking: bool | None = None
     thinking_effort: str | None = None
 
-    # Eval sets are scored at step 0, every `eval_interval` steps, and at the last step.
-    eval_interval: int = 25
+    # Sampling for evaluate_student (training itself provisions no generator). 0.0 samples greedily.
     eval_max_tokens: int = 1024
-    # 0.0 samples greedily.
     eval_temperature: float = 0.0
 
     # None leaves the server's default for that Adam parameter.
@@ -74,10 +69,6 @@ class DistillConfig:
             raise ValueError("num_epochs must be > 0")
         if self.max_steps is not None and self.max_steps < 1:
             raise ValueError("max_steps must be >= 1 when set")
-        if self.eval_interval < 1:
-            raise ValueError("eval_interval must be >= 1")
-        if self.num_generator_replicas < 0:
-            raise ValueError("num_generator_replicas must be >= 0")
         if self.training_checkpoint_interval < 0 or self.inference_checkpoint_interval < 0:
             raise ValueError("checkpoint intervals must be >= 0 (0 disables)")
         validate_lora_config(self)

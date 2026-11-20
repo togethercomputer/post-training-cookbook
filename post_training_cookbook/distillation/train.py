@@ -1,9 +1,13 @@
-"""Off-policy distillation training: SFT on teacher rows, scored on the generator as it trains.
+"""Off-policy distillation training: SFT on teacher rows.
 
 The student trains with cross-entropy on chat rows from :func:`post_training_cookbook.distillation.data.sft_rows`,
-masking the prompt and training the assistant turn (``TRAIN_ON_LAST``). The resource keeps a generator
-replica, so each eval set is scored at step 0 (the untouched base model), every ``eval_interval`` steps
-and at the last step, on the same session, with the same sampling. No separate endpoint is needed.
+masking the prompt and training the assistant turn (``TRAIN_ON_LAST``). Training provisions no generator
+replica, so a run pays only for the trainer; the final inference checkpoint registers the adapter for
+deployment. To evaluate the trained student, deploy that checkpoint with Dedicated Model Inference
+(https://docs.together.ai/docs/dedicated-endpoints/configs) and score it there.
+
+:func:`evaluate_student` scores the untrained base model on a short-lived resource with one generator,
+for screening a task before generating teacher data.
 """
 
 from __future__ import annotations
@@ -41,8 +45,6 @@ class DistillResult:
     run_dir: Path
     # The last inference checkpoint saved (its registration holds the deployable adapter or model).
     inference_checkpoint: str | None
-    # The most recent metrics for every eval set, keyed by set name.
-    eval_metrics: dict[str, dict[str, float]]
 
 
 def render_rows(rows: Sequence[dict[str, Any]], codec: MessageCodec, max_length: int) -> tuple[list[Sample], int]:
@@ -93,7 +95,7 @@ def _codec(config: DistillConfig) -> MessageCodec:
     )
 
 
-def _session(config: DistillConfig):
+def _session(config: DistillConfig, *, num_generator_replicas: int):
     return training_session(
         model=config.model,
         model_resources_id=config.model_resources_id,
@@ -103,13 +105,8 @@ def _session(config: DistillConfig):
         load_optimizer=config.load_optimizer,
         lora_config=lora_config_from(config),
         lora_enabled=config.use_lora,
-        num_generator_replicas=config.num_generator_replicas,
+        num_generator_replicas=num_generator_replicas,
     )
-
-
-def _require_generator(config: DistillConfig, eval_sets: Sequence[EvalSet]) -> None:
-    if eval_sets and config.model_resources_id is None and config.num_generator_replicas < 1:
-        raise ValueError("eval sets are sampled on the generator; set num_generator_replicas >= 1")
 
 
 def run_evals(
@@ -146,19 +143,14 @@ def run_evals(
     return results
 
 
-def train(
-    config: DistillConfig,
-    rows: Sequence[dict[str, Any]],
-    eval_sets: Sequence[EvalSet] = (),
-) -> DistillResult:
-    """Fine-tune the student on teacher ``rows``, scoring ``eval_sets`` before, during and after training.
+def train(config: DistillConfig, rows: Sequence[dict[str, Any]]) -> DistillResult:
+    """Fine-tune the student on teacher ``rows`` and save an inference checkpoint at the last step.
 
     Rendering happens before the resource is provisioned, so an unrenderable dataset fails before
-    anything bills. The resource and session are stopped on exit, even if a step raises.
+    anything bills. The resource has no generator replica, and it and the session are stopped on
+    exit, even if a step raises.
     """
     load_dotenv(override=True)
-    eval_sets = list(eval_sets)
-    _require_generator(config, eval_sets)
     codec = _codec(config)
     samples, dropped = render_rows(rows, codec, config.max_length)
     if not samples:
@@ -176,15 +168,14 @@ def train(
         total_steps = min(total_steps, config.max_steps)
     print(
         f"{len(rows)} rows -> {len(samples)} samples ({dropped} dropped); {total_steps} steps "
-        f"({steps_per_epoch}/epoch, batch {config.batch_size}); eval sets: {[e.name for e in eval_sets]}",
+        f"({steps_per_epoch}/epoch, batch {config.batch_size})",
         flush=True,
     )
 
     with (
-        _session(config) as session,
+        _session(config, num_generator_replicas=0) as session,
         track_run(config, kind="distill", session_id=session.session_id, total_steps=total_steps) as run,
     ):
-        latest = run_evals(session, codec, config, run, 0, eval_sets) if eval_sets else {}
         overall_start = time.monotonic()
         for step, indices in zip(range(total_steps), _batches(len(samples), config.batch_size, config.seed)):
             batch = [samples[i] for i in indices]
@@ -212,12 +203,6 @@ def train(
             if step_num == 1 or step_num % 10 == 0:
                 print(f"[step {step_num}/{total_steps}] loss={loss:.4f} lr={lr:.2e}", flush=True)
 
-            last = step_num == total_steps
-            if eval_sets and (step_num % config.eval_interval == 0 or last):
-                session.trainer.weights_sync(timeout=config.timeout)
-                due = [e for e in eval_sets if e.every_eval or last]
-                latest |= run_evals(session, codec, config, run, step_num, due)
-
             checkpoint_if_due(
                 session,
                 run,
@@ -228,19 +213,22 @@ def train(
             )
         inference_checkpoint = latest_checkpoint_ref(run, kind="inference")
         run_dir = run.dir
-    return DistillResult(run_dir=run_dir, inference_checkpoint=inference_checkpoint, eval_metrics=latest)
+    return DistillResult(run_dir=run_dir, inference_checkpoint=inference_checkpoint)
 
 
 def evaluate_student(config: DistillConfig, eval_sets: Sequence[EvalSet]) -> dict[str, dict[str, float]]:
-    """Score the untrained student on ``eval_sets`` (a fresh LoRA adapter is the base model), then release the GPUs."""
+    """Score the untrained student on ``eval_sets`` (a fresh LoRA adapter is the base model), then release the GPUs.
+
+    Sampling needs a generator, so this provisions one replica; an attached resource without one is
+    rejected before a session is created.
+    """
     load_dotenv(override=True)
     eval_sets = list(eval_sets)
     if not eval_sets:
         raise ValueError("evaluate_student needs at least one eval set")
-    _require_generator(config, eval_sets)
     codec = _codec(config)
     with (
-        _session(config) as session,
+        _session(config, num_generator_replicas=1) as session,
         track_run(config, kind="distill-eval", session_id=session.session_id, total_steps=0) as run,
     ):
         return run_evals(session, codec, config, run, 0, eval_sets)
