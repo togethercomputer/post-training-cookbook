@@ -37,8 +37,8 @@ from together.post_training import LoraConfig
 from post_training_cookbook.codecs import get_codec
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.mopd.config import MOPDConfig
-from post_training_cookbook.mopd.domains import default_domains, load_splits
-from post_training_cookbook.mopd.evaluate import build_eval_items, evaluate_checkpoints
+from post_training_cookbook.mopd.domains import default_domains
+from post_training_cookbook.mopd.evaluate import evaluate_test_splits
 from post_training_cookbook.mopd.experts import MIXED, expert_configs, train_experts
 from post_training_cookbook.mopd.train import train
 from post_training_cookbook.multi_lora import model_resource
@@ -101,28 +101,6 @@ def student_config(model_resources_id: str, teacher_checkpoints: dict[str, str])
     )
 
 
-def evaluate(resources, models: dict[str, str | None]) -> dict:
-    """Score every model on each domain's full test split, up to 4 sessions at a time."""
-    codec = get_codec(MODEL, enable_thinking=False)
-    items, skipped = {}, {}
-    for domain in DOMAINS:
-        _, test = load_splits(domain)
-        items[domain.name], skipped[domain.name] = build_eval_items(
-            domain, test, codec, max_prompt_length=MAX_PROMPT_LENGTH, max_model_length=MAX_MODEL_LENGTH
-        )
-    return evaluate_checkpoints(
-        resources,
-        models,
-        DOMAINS,
-        items,
-        codec,
-        lora_config=LoraConfig(rank=LORA_RANK, alpha=LORA_ALPHA),
-        out_dir=Path("runs") / f"{RUN_PREFIX}-eval",
-        max_sample_tokens=MAX_SAMPLE_TOKENS,
-        skipped=skipped,
-    )
-
-
 if __name__ == "__main__":
     load_dotenv(override=True)
     # One generator replica is enough: the sessions' training steps queue on the shared trainer,
@@ -146,7 +124,17 @@ if __name__ == "__main__":
         # 3. Every model on every domain's test split.
         models = {"base": None, **teachers, MIXED: experts[MIXED].training_checkpoint_id}
         models["student"] = student.training_checkpoint_id
-        summaries = evaluate(resources, models)
+        summaries = evaluate_test_splits(
+            resources,
+            models,
+            DOMAINS,
+            get_codec(MODEL, enable_thinking=False),
+            lora_config=LoraConfig(rank=LORA_RANK, alpha=LORA_ALPHA),
+            out_dir=Path("runs") / f"{RUN_PREFIX}-eval",
+            max_prompt_length=MAX_PROMPT_LENGTH,
+            max_model_length=MAX_MODEL_LENGTH,
+            max_sample_tokens=MAX_SAMPLE_TOKENS,
+        )
 
     (Path("runs") / f"{RUN_PREFIX}-eval" / "summary.json").write_text(json.dumps(summaries, indent=2))
     print(f"\n{'model':<10}" + "".join(f"{d.name:>10}" for d in DOMAINS))

@@ -21,10 +21,18 @@ from together.post_training import LoraConfig, ModelResourcesClient, SamplingPar
 
 from post_training_cookbook.codecs.base import MessageCodec
 from post_training_cookbook.datasets.registry import build_prompt_example
-from post_training_cookbook.mopd.domains import Domain
+from post_training_cookbook.mopd.domains import Domain, load_splits
 from post_training_cookbook.samples import make_prompt
 
-__all__ = ["DomainEval", "EvalItem", "build_eval_items", "evaluate_checkpoints", "evaluate_session", "write_eval"]
+__all__ = [
+    "DomainEval",
+    "EvalItem",
+    "build_eval_items",
+    "evaluate_checkpoints",
+    "evaluate_session",
+    "evaluate_test_splits",
+    "write_eval",
+]
 
 _SAMPLE_CHUNK = 256
 
@@ -215,3 +223,44 @@ def evaluate_checkpoints(
     with ThreadPoolExecutor(max_workers=max(1, min(max_concurrent, len(models)))) as pool:
         futures = {label: pool.submit(run_one, label, checkpoint_id) for label, checkpoint_id in models.items()}
         return {label: future.result() for label, future in futures.items()}
+
+
+def evaluate_test_splits(
+    resources: ModelResourcesClient,
+    models: dict[str, str | None],
+    domains: Sequence[Domain],
+    codec: MessageCodec,
+    *,
+    lora_config: LoraConfig | None,
+    out_dir: Path,
+    max_prompt_length: int,
+    max_model_length: int,
+    max_sample_tokens: int,
+    max_concurrent: int = 4,
+    timeout: float | None = None,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Score several models on every domain's full test split (see :func:`evaluate_checkpoints`).
+
+    Loads each domain's test rows with :func:`~post_training_cookbook.mopd.domains.load_splits`,
+    renders them once with ``codec``, and records how many prompts were skipped as too long.
+    """
+    items: dict[str, list[EvalItem]] = {}
+    skipped: dict[str, int] = {}
+    for domain in domains:
+        _, test = load_splits(domain)
+        items[domain.name], skipped[domain.name] = build_eval_items(
+            domain, test, codec, max_prompt_length=max_prompt_length, max_model_length=max_model_length
+        )
+    return evaluate_checkpoints(
+        resources,
+        models,
+        domains,
+        items,
+        codec,
+        lora_config=lora_config,
+        out_dir=out_dir,
+        max_sample_tokens=max_sample_tokens,
+        max_concurrent=max_concurrent,
+        skipped=skipped,
+        timeout=timeout,
+    )

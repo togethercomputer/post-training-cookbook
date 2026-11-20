@@ -2,7 +2,7 @@ import pytest
 
 from post_training_cookbook.mopd.teachers import open_teacher, score_with_generator, score_with_trainer
 
-from ._fakes import FakeResource, FakeSession, logprob_of
+from ._fakes import CharCodec, FakeResource, FakeSession, logprob_of, toy_domain
 
 
 def test_generator_scores_are_the_prompt_logprobs_of_the_completion_positions():
@@ -81,3 +81,37 @@ def test_eval_session_creation_waits_out_a_full_resource(monkeypatch):
     resource.create_session = flaky
     session = evaluate._create_session_when_free(resource, display_name="eval-x")
     assert calls["n"] == 3 and session.create_kwargs["display_name"] == "eval-x"
+
+
+def test_evaluate_test_splits_scores_every_model_on_every_test_split(tmp_path):
+    from post_training_cookbook.mopd.evaluate import evaluate_test_splits
+
+    short = [{"q": f"a{i}?", "a": f"a{i}"} for i in range(6)]
+    long = [{"q": "x" * 200, "a": f"long{i}"} for i in range(6)]
+    domains = [toy_domain("alpha", short, 3, 3), toy_domain("beta", long, 2, 4)]
+    resource = FakeResource(answer=[ord(c) for c in "ok a1"])
+    summaries = evaluate_test_splits(
+        resource,
+        {"base": None, "expert": "ckpt-e"},
+        domains,
+        CharCodec(),
+        lora_config=None,
+        out_dir=tmp_path,
+        max_prompt_length=64,
+        max_model_length=128,
+        max_sample_tokens=8,
+    )
+    assert set(summaries) == {"base", "expert"}
+    for label in summaries:
+        assert set(summaries[label]) == {"alpha", "beta"}
+        assert summaries[label]["alpha"]["n"] == 3
+        assert (tmp_path / label / "alpha.jsonl").exists()
+    # Prompts too long to render are counted, not silently dropped.
+    assert summaries["base"]["beta"]["n"] == 0
+    assert summaries["base"]["beta"]["skipped_prompts"] == 4
+    # The base model is a fresh adapter; a checkpoint is resumed without its optimizer.
+    by_name = {s.create_kwargs["display_name"]: s for s in resource.sessions}
+    assert by_name["eval-base"].create_kwargs["resume_from_checkpoint_id"] is None
+    assert by_name["eval-expert"].create_kwargs["resume_from_checkpoint_id"] == "ckpt-e"
+    assert by_name["eval-expert"].create_kwargs["load_optimizer"] is False
+    assert all(s.stopped for s in resource.sessions)
