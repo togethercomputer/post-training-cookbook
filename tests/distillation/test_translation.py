@@ -1,11 +1,21 @@
-"""FLORES-200 helpers with the Hugging Face download stubbed: prompts, items, sources and metrics."""
+"""FLORES-200 recipe helpers with the Hugging Face download stubbed: prompts, filters, items, sources and metrics."""
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
 import pytest
 
-from post_training_cookbook.distillation import translation
-from post_training_cookbook.distillation.teacher import Spend, TeacherConfig, TeacherOutput
+from post_training_cookbook.distillation.teacher import Spend, TeacherConfig, TeacherOutput, TeacherRequest
+
+# The translation helpers are recipe code (recipes/distillation/ is not a package), so load the file by path.
+_PATH = Path(__file__).resolve().parents[2] / "recipes" / "distillation" / "translation.py"
+_spec = importlib.util.spec_from_file_location("translation", _PATH)
+translation = importlib.util.module_from_spec(_spec)
+sys.modules["translation"] = translation
+_spec.loader.exec_module(translation)
 
 LAO = ["ສະບາຍດີ", "ຂອບໃຈ", "ລາກ່ອນ"]
 THAI = ["สวัสดี", "ขอบคุณ", "ลาก่อน"]
@@ -19,6 +29,31 @@ FLORES = {
 @pytest.fixture(autouse=True)
 def _flores(monkeypatch):
     monkeypatch.setattr(translation, "flores_lines", lambda lang, split: FLORES[(lang, split)])
+
+
+def _request(key: str, source: str = "hello") -> TeacherRequest:
+    return TeacherRequest(key=key, messages=[{"role": "user", "content": source}], meta={"source": source})
+
+
+def test_script_fraction_counts_letters_only() -> None:
+    assert translation.script_fraction(LAO[0], "LAO") == 1.0
+    assert translation.script_fraction(THAI[0], "LAO") == 0.0
+    assert translation.script_fraction("123 !!", "LAO") == 0.0
+    assert 0.0 < translation.script_fraction(f"{LAO[0]} Obama", "LAO") < 1.0
+
+
+def test_in_script_rejects_the_neighbouring_script() -> None:
+    keep_lao = translation.in_script("LAO")
+    assert keep_lao.__name__ == "in_script_lao"
+    assert keep_lao(_request("k"), TeacherOutput(key="k", ok=True, content=LAO[0]))
+    assert not keep_lao(_request("k"), TeacherOutput(key="k", ok=True, content=THAI[0]))
+
+
+def test_not_an_echo() -> None:
+    output = TeacherOutput(key="k", ok=True, content=" hello there ")
+    assert not translation.not_an_echo(_request("k", "Hello there"), output)
+    assert translation.not_an_echo(_request("k", "Hello there"), TeacherOutput(key="k", ok=True, content=LAO[0]))
+    assert translation.not_an_echo(TeacherRequest(key="k", messages=[]), TeacherOutput(key="k", ok=True, content="x"))
 
 
 def test_prompt_wording_is_stable() -> None:

@@ -18,12 +18,12 @@ Run: uv run python recipes/distillation/screen_languages.py
 from pathlib import Path
 
 from dotenv import load_dotenv
+from translation import LANGUAGES, translation_eval_set  # recipes/distillation/translation.py
 
 from post_training_cookbook.distillation.config import DistillConfig
 from post_training_cookbook.distillation.evaluate import score_answered, teacher_outputs
 from post_training_cookbook.distillation.teacher import TeacherConfig
 from post_training_cookbook.distillation.train import evaluate_student
-from post_training_cookbook.distillation.translation import LANGUAGES, translation_eval_set
 
 CANDIDATES = [lang for lang in LANGUAGES if lang not in ("eng_Latn", "tha_Thai")]
 NUM_SENTENCES = 50

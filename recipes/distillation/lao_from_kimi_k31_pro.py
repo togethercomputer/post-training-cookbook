@@ -30,12 +30,12 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from translation import cached_sentences, english_sources, translation_rows  # recipes/distillation/translation.py
 
 from post_training_cookbook.distillation.config import DistillConfig
 from post_training_cookbook.distillation.data import mix, write_jsonl
 from post_training_cookbook.distillation.teacher import TeacherConfig
 from post_training_cookbook.distillation.train import train
-from post_training_cookbook.distillation.translation import cached_sentences, english_sources, translation_rows
 
 CACHE_DIR = Path("_dev/distillation")
 # Shared with multilingual_from_kimi_k31_pro.py: Lao uses the first 3,000, Thai the last 1,000.

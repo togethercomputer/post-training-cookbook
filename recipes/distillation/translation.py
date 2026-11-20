@@ -1,4 +1,7 @@
-"""FLORES-200 translation helpers for distillation: prompts, eval items, chrF++ and script rate.
+"""FLORES-200 translation helpers for the distillation recipes: prompts, filters, eval items and metrics.
+
+This is the task-specific half of the recipes: the ``post_training_cookbook.distillation`` package
+stays task-agnostic, and a new task brings its own module like this one.
 
 FLORES-200 has two splits per language, ``dev`` (997 sentences) and ``devtest`` (1,012), translated
 line-for-line from the same English. Teacher sources come from ``dev`` (or any other English text)
@@ -11,7 +14,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from pathlib import Path
@@ -19,9 +24,9 @@ from typing import Any
 
 import sacrebleu
 
-from post_training_cookbook.distillation.data import in_script, not_an_echo, script_fraction, sft_rows
+from post_training_cookbook.distillation.data import Filter, sft_rows
 from post_training_cookbook.distillation.evaluate import EvalSet
-from post_training_cookbook.distillation.teacher import TeacherConfig, TeacherRequest, generate
+from post_training_cookbook.distillation.teacher import TeacherConfig, TeacherOutput, TeacherRequest, generate
 from post_training_cookbook.types import Message
 
 FLORES_REPO = "DGME/FLORES-200"
@@ -42,7 +47,7 @@ LANGUAGES = {
     "nso_Latn": "Northern Sotho",
 }
 
-# Unicode script prefix for languages with their own script (see ``data.script_fraction``).
+# Unicode script prefix for languages with their own script (see ``script_fraction``).
 SCRIPTS = {
     "lao_Laoo": "LAO",
     "tha_Thai": "THAI",
@@ -61,6 +66,34 @@ def flores_lines(lang: str, split: str) -> tuple[str, ...]:
     path = hf_hub_download(FLORES_REPO, f"{split}/{lang}.{split}", repo_type="dataset")
     with open(path, encoding="utf-8") as f:
         return tuple(f.read().splitlines())
+
+
+def script_fraction(text: str, script: str) -> float:
+    """Fraction of alphabetic characters whose Unicode name starts with ``script`` (e.g. ``"LAO"``)."""
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return 0.0
+    return sum(unicodedata.name(ch, "").startswith(script) for ch in letters) / len(letters)
+
+
+def in_script(script: str, min_fraction: float = 0.7) -> Filter:
+    """Keep outputs whose letters are at least ``min_fraction`` in ``script``.
+
+    Catches a teacher that answered in the wrong language or script. Names written in Latin
+    script lower the fraction, which is why the default leaves room for them.
+    """
+
+    def keep(request: TeacherRequest, output: TeacherOutput) -> bool:
+        return script_fraction(output.content, script) >= min_fraction
+
+    keep.__name__ = f"in_script_{script.lower()}"
+    return keep
+
+
+def not_an_echo(request: TeacherRequest, output: TeacherOutput) -> bool:
+    """Drop outputs that repeat ``request.meta["source"]`` (a teacher that echoed instead of translating)."""
+    source = request.meta.get("source")
+    return source is None or output.content.strip().casefold() != str(source).strip().casefold()
 
 
 def translation_prompt(lang: str, text: str) -> str:
@@ -163,8 +196,6 @@ def sentences_from_dataset(
     reads whole parquet shards, so the first call downloads a few hundred megabytes; keep
     ``max_rows`` small.
     """
-    import random
-
     from datasets import load_dataset
 
     stream = load_dataset(name, config, split=split, streaming=True)
