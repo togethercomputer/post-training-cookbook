@@ -118,8 +118,11 @@ def test_evaluate_student_scores_the_base_model(monkeypatch, tmp_path) -> None:
 
 
 def test_student_outputs_parse_responses_and_flag_truncation() -> None:
+    def parse_response(tokens):
+        return {"role": "assistant", "content": "".join(map(chr, tokens))}, True
+
     codec = DummyCodec()
-    codec.parse_response = lambda tokens: ({"role": "assistant", "content": "".join(map(chr, tokens))}, True)
+    codec.parse_response = parse_response
 
     def sample_batch(prompts, **kwargs):
         return [

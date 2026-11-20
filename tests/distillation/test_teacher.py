@@ -17,11 +17,12 @@ from post_training_cookbook.distillation.teacher import (
     load_cache,
 )
 
+# Every FakeClient built in the current test, cleared by the autouse fixture.
+CLIENTS: list[FakeClient] = []
+
 
 class FakeClient:
     """Stands in for ``AsyncTogether``: echoes the prompt upper-cased, records every call."""
-
-    instances: list[FakeClient] = []
 
     def __init__(self, *, api_key, max_retries, timeout, fail_on=(), bug_on=(), finish_reason="stop", reasoning=None):
         self.api_key = api_key
@@ -32,7 +33,7 @@ class FakeClient:
         self.finish_reason = finish_reason
         self.reasoning = reasoning
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
-        FakeClient.instances.append(self)
+        CLIENTS.append(self)
 
     async def _create(self, **kwargs):
         self.calls.append(kwargs)
@@ -53,7 +54,7 @@ class FakeClient:
 
 @pytest.fixture(autouse=True)
 def _keys(monkeypatch):
-    FakeClient.instances.clear()
+    CLIENTS.clear()
     monkeypatch.setenv("KEY_A", "a")
     monkeypatch.setenv("KEY_B", "b")
 
@@ -87,7 +88,7 @@ def test_failures_are_cached_and_retried_on_the_next_run(tmp_path) -> None:
     cache = tmp_path / "teacher.jsonl"
 
     outputs, spend = generate(_requests("a", "b"), _config(), cache, client_factory=_factory(fail_on={"b"}))
-    assert outputs["b"].ok is False and "upstream 503" in outputs["b"].error
+    assert not outputs["b"].ok and "upstream 503" in outputs["b"].error
     assert spend.failures == 1
 
     outputs, spend = generate(_requests("a", "b"), _config(), cache, client_factory=_factory())
@@ -113,15 +114,15 @@ def test_budget_stops_generation(tmp_path) -> None:
 def test_each_api_key_gets_its_own_client_and_all_are_closed(tmp_path) -> None:
     config = _config(api_key_envs=("KEY_A", "KEY_B"))
     generate(_requests(*"abcdefgh"), config, tmp_path / "t.jsonl", client_factory=_factory())
-    assert sorted(c.api_key for c in FakeClient.instances) == ["a", "b"]
-    assert all(c.closed for c in FakeClient.instances)
-    assert sum(len(c.calls) for c in FakeClient.instances) == 8
+    assert sorted(c.api_key for c in CLIENTS) == ["a", "b"]
+    assert all(c.closed for c in CLIENTS)
+    assert sum(len(c.calls) for c in CLIENTS) == 8
 
 
 def test_request_kwargs_pass_template_kwargs_and_reasoning_effort(tmp_path) -> None:
     config = _config(chat_template_kwargs={"thinking": False}, reasoning_effort="low", max_tokens=64)
     generate(_requests("a"), config, tmp_path / "t.jsonl", client_factory=_factory())
-    (call,) = FakeClient.instances[0].calls
+    (call,) = CLIENTS[0].calls
     assert call["chat_template_kwargs"] == {"thinking": False}
     assert call["reasoning_effort"] == "low"
     assert call["max_tokens"] == 64 and call["model"] == "org/Teacher"
@@ -129,7 +130,7 @@ def test_request_kwargs_pass_template_kwargs_and_reasoning_effort(tmp_path) -> N
 
 def test_optional_kwargs_are_left_out_when_unset(tmp_path) -> None:
     generate(_requests("a"), _config(), tmp_path / "t.jsonl", client_factory=_factory())
-    (call,) = FakeClient.instances[0].calls
+    (call,) = CLIENTS[0].calls
     assert "chat_template_kwargs" not in call and "reasoning_effort" not in call
 
 

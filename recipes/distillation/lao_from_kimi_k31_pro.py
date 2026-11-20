@@ -67,7 +67,6 @@ config = DistillConfig(
     lora_rank=64,
     lora_alpha=128,
     max_length=2048,
-    wandb_project=None,
 )
 
 

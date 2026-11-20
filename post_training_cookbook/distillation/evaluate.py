@@ -13,9 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from together.post_training import SamplingParams
+from together.post_training import SamplingParams, SessionClient
 
-from post_training_cookbook.distillation.teacher import TeacherConfig, TeacherRequest, generate
+from post_training_cookbook.codecs import MessageCodec
+from post_training_cookbook.distillation.teacher import TeacherConfig, TeacherOutput, TeacherRequest, generate
 from post_training_cookbook.samples import make_prompt
 
 Metrics = Callable[[Sequence[dict[str, Any]], Sequence[str]], dict[str, float]]
@@ -31,8 +32,8 @@ class EvalSet:
 
 
 def student_outputs(
-    session: Any,
-    codec: Any,
+    session: SessionClient,
+    codec: MessageCodec,
     items: Sequence[dict[str, Any]],
     *,
     max_tokens: int,
@@ -64,7 +65,14 @@ def teacher_outputs(items: Sequence[dict[str, Any]], config: TeacherConfig, cach
     """
     requests = [TeacherRequest(key=it["id"], messages=list(it["messages"])) for it in items]
     outputs, _ = generate(requests, config, cache_path)
-    return [outputs[it["id"]].content if it["id"] in outputs and outputs[it["id"]].ok else None for it in items]
+    return [_answer(outputs.get(it["id"])) for it in items]
+
+
+def _answer(output: TeacherOutput | None) -> str | None:
+    """The teacher's text, or ``None`` when the call is missing or failed."""
+    if output is None or not output.ok:
+        return None
+    return output.content
 
 
 def score_answered(eval_set: EvalSet, outputs: Sequence[str | None]) -> dict[str, float]:

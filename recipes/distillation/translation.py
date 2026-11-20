@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 import sacrebleu
+from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 
 from post_training_cookbook.distillation.data import Filter, sft_rows
 from post_training_cookbook.distillation.evaluate import EvalSet
@@ -62,8 +64,6 @@ SCRIPTS = {
 @lru_cache(maxsize=64)
 def flores_lines(lang: str, split: str) -> tuple[str, ...]:
     """The sentences of one FLORES-200 language and split, in line order."""
-    from huggingface_hub import hf_hub_download
-
     path = hf_hub_download(FLORES_REPO, f"{split}/{lang}.{split}", repo_type="dataset")
     with open(path, encoding="utf-8") as f:
         return tuple(f.read().splitlines())
@@ -97,16 +97,14 @@ def not_an_echo(request: TeacherRequest, output: TeacherOutput) -> bool:
     return source is None or output.content.strip().casefold() != str(source).strip().casefold()
 
 
-def translation_prompt(lang: str, text: str) -> str:
+def translation_messages(lang: str, text: str) -> list[Message]:
+    """The one-turn prompt asking for a translation of ``text`` into ``lang``."""
     name = LANGUAGES[lang]
-    return (
+    prompt = (
         f"Translate the following English text into {name}. "
         f"Output only the {name} translation, with no explanation.\n\n{text}"
     )
-
-
-def translation_messages(lang: str, text: str) -> list[Message]:
-    return [{"role": "user", "content": translation_prompt(lang, text)}]
+    return [{"role": "user", "content": prompt}]
 
 
 def teacher_requests(lang: str, sources: Iterable[str]) -> list[TeacherRequest]:
@@ -178,33 +176,26 @@ def english_sources(*, flores_dev: bool = True, extra: Iterable[str] = ()) -> li
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"“])")
 _MARKUP = re.compile(r"[\[\]{}|=<>]|https?:")
 
+# English Wikipedia articles mined for extra teacher sources: sentences of 10 to 40 words from the
+# first 3,000 articles. Streaming reads whole parquet shards, so the first call downloads a few
+# hundred megabytes.
+WIKIPEDIA = ("wikimedia/wikipedia", "20231101.en")
+WIKIPEDIA_MAX_ARTICLES = 3000
+SENTENCE_WORDS = (10, 40)
 
-def sentences_from_dataset(
-    name: str = "wikimedia/wikipedia",
-    config: str | None = "20231101.en",
-    *,
-    split: str = "train",
-    column: str = "text",
-    n: int = 3000,
-    min_words: int = 10,
-    max_words: int = 40,
-    max_rows: int = 3000,
-    seed: int = 0,
-) -> list[str]:
-    """Clean English sentences streamed from a text dataset, for extra teacher sources.
 
-    Skips short paragraphs (headings, captions, lists) and sentences with markup or URLs. Streaming
-    reads whole parquet shards, so the first call downloads a few hundred megabytes; keep
-    ``max_rows`` small.
+def wikipedia_sentences(n: int, *, seed: int = 0) -> list[str]:
+    """``n`` clean English Wikipedia sentences, shuffled with ``seed``.
+
+    Skips short paragraphs (headings, captions, lists) and sentences with markup or URLs.
     """
-    from datasets import load_dataset
-
-    stream = load_dataset(name, config, split=split, streaming=True)
+    min_words, max_words = SENTENCE_WORDS
+    stream = load_dataset(*WIKIPEDIA, split="train", streaming=True)
     seen: dict[str, None] = {}
     for i, row in enumerate(stream):
-        if i >= max_rows or len(seen) >= 4 * n:
+        if i >= WIKIPEDIA_MAX_ARTICLES or len(seen) >= 4 * n:
             break
-        for para in str(row[column]).split("\n"):
+        for para in str(row["text"]).split("\n"):
             if len(para) < 200:
                 continue
             for sent in _SENTENCE_SPLIT.split(para):
@@ -217,8 +208,8 @@ def sentences_from_dataset(
     return sentences[:n]
 
 
-def cached_sentences(path: Path, n: int, **kwargs: Any) -> list[str]:
-    """:func:`sentences_from_dataset`, saved to ``path`` on first use so every run sees the same sentences.
+def cached_sentences(path: Path, n: int) -> list[str]:
+    """:func:`wikipedia_sentences`, saved to ``path`` on first use so every run sees the same sentences.
 
     A saved list with at least ``n`` sentences is reused (its first ``n``); a shorter one is rebuilt.
     """
@@ -226,7 +217,7 @@ def cached_sentences(path: Path, n: int, **kwargs: Any) -> list[str]:
         saved = json.loads(path.read_text(encoding="utf-8"))
         if len(saved) >= n:
             return saved[:n]
-    sentences = sentences_from_dataset(n=n, **kwargs)
+    sentences = wikipedia_sentences(n)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sentences, ensure_ascii=False), encoding="utf-8")
     return sentences

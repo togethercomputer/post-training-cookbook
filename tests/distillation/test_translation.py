@@ -58,7 +58,7 @@ def test_not_an_echo() -> None:
 
 def test_prompt_wording_is_stable() -> None:
     # Cache keys hash only the source, so a reworded prompt would silently reuse old translations.
-    assert translation.translation_prompt("lao_Laoo", "Hi.") == (
+    assert translation.translation_messages("lao_Laoo", "Hi.")[0]["content"] == (
         "Translate the following English text into Lao. Output only the Lao translation, with no explanation.\n\nHi."
     )
 
@@ -146,7 +146,7 @@ def test_cached_sentences_are_saved_and_reused(monkeypatch, tmp_path) -> None:
         calls.append(n)
         return [f"Sentence {i}." for i in range(n)]
 
-    monkeypatch.setattr(translation, "sentences_from_dataset", fake_sentences)
+    monkeypatch.setattr(translation, "wikipedia_sentences", fake_sentences)
     path = tmp_path / "wiki.json"
 
     assert translation.cached_sentences(path, 4) == [f"Sentence {i}." for i in range(4)]

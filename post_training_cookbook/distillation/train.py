@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from together.post_training import AdamParams, LossConfig, Sample
+from together.post_training import AdamParams, LossConfig, Sample, SessionClient
 
 from post_training_cookbook.codecs import MessageCodec, get_codec
 from post_training_cookbook.config import lora_config_from, session_metadata_from
@@ -120,7 +120,7 @@ def _session(config: DistillConfig, *, num_generator_replicas: int):
 
 
 def run_evals(
-    session: Any,
+    session: SessionClient,
     codec: MessageCodec,
     config: DistillConfig,
     run: Run,

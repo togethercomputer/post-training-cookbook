@@ -1,7 +1,7 @@
 [project]
 name = "post-training-cookbook"
 version = "0.1.0"
-description = "Post-training recipes (GRPO, SFT, DPO) for Together Post Training"
+description = "Post-training recipes (GRPO, SFT, DPO, distillation) for Together Post Training"
 requires-python = ">=3.11"
 dependencies = [
     "math-verify[antlr4_13_2]~=0.9",
