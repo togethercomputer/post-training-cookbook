@@ -7,10 +7,10 @@ Each step:
    log-probabilities.
 2. **Score.** Each completion goes to its domain's teacher, which scores the student's exact
    tokens teacher-forced (:mod:`post_training_cookbook.mopd.teachers`). Teachers score in parallel.
-3. **Train.** Per-token advantage ``kl_coef * (teacher - student)`` log-probability, shared
-   between domains per ``balance``; one ``forward_backward`` with the built-in importance-sampling
-   loss, then ``optim_step`` (cosine schedule) and ``weights_sync`` so the next step samples the
-   updated student.
+3. **Train.** Per-token advantage ``kl_coef * (teacher - student)`` log-probability, clipped to
+   ``[-advantage_clip, advantage_clip]`` and shared between domains per ``balance``; one
+   ``forward_backward`` with the built-in importance-sampling loss, then ``optim_step`` (cosine
+   schedule) and ``weights_sync`` so the next step samples the updated student.
 
 Per-domain metrics show what the student learns from each teacher: ``<domain>/reverse_kl`` (the
 per-token reverse-KL estimate, which falls as the student matches its teacher),
@@ -46,7 +46,12 @@ from post_training_cookbook.codecs.base import MessageCodec
 from post_training_cookbook.datasets.registry import PromptExample, build_prompt_example
 from post_training_cookbook.grpo.loop import get_lr_cosine
 from post_training_cookbook.mopd.config import MOPDConfig
-from post_training_cookbook.mopd.distill import Completion, balance_weights, build_distillation_sample
+from post_training_cookbook.mopd.distill import (
+    Completion,
+    balance_weights,
+    build_distillation_sample,
+    token_advantages,
+)
 from post_training_cookbook.mopd.domains import Domain, load_splits
 from post_training_cookbook.mopd.evaluate import EvalItem, build_eval_items, evaluate_session
 from post_training_cookbook.mopd.teachers import open_teacher, score_with_generator, score_with_trainer
@@ -250,7 +255,9 @@ def _train_step(
     # 3. Train: one importance-sampling pass on the per-token distillation advantages.
     weights = balance_weights(completions, config.balance)
     samples = [
-        build_distillation_sample(completion, kl_coef=config.kl_coef, weight=weight)
+        build_distillation_sample(
+            completion, kl_coef=config.kl_coef, advantage_clip=config.advantage_clip, weight=weight
+        )
         for completion, weight in zip(completions, weights, strict=True)
     ]
     t0 = time.monotonic()
@@ -306,7 +313,13 @@ def _step_metrics(
     total_tokens = sum(len(c.completion_tokens) for c in completions)
     total_weight = sum(w * len(c.completion_tokens) for c, w in zip(completions, weights))
     all_kl = np.concatenate([c.reverse_kl for c in completions])
-    advantages = -config.kl_coef * np.concatenate([w * c.reverse_kl for c, w in zip(completions, weights)])
+    raw_advantages = np.concatenate([-config.kl_coef * c.reverse_kl for c in completions])
+    advantages = np.concatenate(
+        [
+            w * np.asarray(token_advantages(c, kl_coef=config.kl_coef, clip=config.advantage_clip))
+            for c, w in zip(completions, weights)
+        ]
+    )
     metrics: dict[str, Any] = {
         "reverse_kl": float(all_kl.mean()),
         "completion_tokens": total_tokens,
@@ -315,6 +328,11 @@ def _step_metrics(
         "advantage/p01": float(np.percentile(advantages, 1)),
         "advantage/p99": float(np.percentile(advantages, 99)),
         "advantage/min": float(advantages.min()),
+        "advantage/max": float(advantages.max()),
+        # Share of completion tokens whose advantage was clipped (0 when advantage_clip is None).
+        "advantage/clipped_frac": float(
+            np.mean(np.abs(raw_advantages) > config.advantage_clip) if config.advantage_clip is not None else 0.0
+        ),
     }
     for domain in domains:
         idx = [i for i, c in enumerate(completions) if c.domain == domain.name]

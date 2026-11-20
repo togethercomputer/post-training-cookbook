@@ -11,15 +11,17 @@ Every expert, teacher and the student is a LoRA session on the same Qwen3.8-27B 
 2. Fusion: a fresh student plus one frozen teacher session per domain, started from the experts'
    final training checkpoints. Each step the student samples 4 answers to 16 prompts per domain,
    the routed teacher scores every token with ``prompt_logprobs``, and the student trains on the
-   per-token reverse KL with the importance-sampling loss.
+   per-token reverse KL with the importance-sampling loss, each token's advantage clipped to ±5.
 3. Evaluation: every model on every domain's held-out test split (500 / 464 / 362 prompts), greedy.
 
-Our run: the student scored 77.8 / 92.9 / 89.5 on math / instruction following / Game of 24,
-within 1.5 points of each expert on its own domain (79.0 / 94.4 / 90.3), against 77.8 / 89.0 /
-90.6 for the pooled GRPO baseline and 54.2 / 80.6 / 72.1 for the base model. The IFEval expert
-learned to game one constraint ("the letter e should appear 3 times" answered with ``e e e``) and
-the student inherited it; read your experts' outputs before you distill them. Experts and
-baseline took 132 minutes, fusion 66 and evaluation 9: about $250 at $72/h.
+Our run (made before the ±5 advantage clip was added; set ``advantage_clip=None`` in
+``student_config`` to reproduce it exactly): the student scored 77.8 / 92.9 / 89.5 on math /
+instruction following / Game of 24, within 1.5 points of each expert on its own domain (79.0 /
+94.4 / 90.3), against 77.8 / 89.0 / 90.6 for the pooled GRPO baseline and 54.2 / 80.6 / 72.1 for
+the base model. The IFEval expert learned to game one constraint ("the letter e should appear 3
+times" answered with ``e e e``) and the student inherited it; read your experts' outputs before you
+distill them. Experts and baseline took 132 minutes, fusion 66 and evaluation 9: about $250 at
+$72/h.
 
 Requires TOGETHER_API_KEY. The resource is stopped when the script exits, even on error.
 

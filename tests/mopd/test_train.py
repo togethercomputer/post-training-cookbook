@@ -97,6 +97,7 @@ def test_fusion_routes_each_completion_to_its_teacher_and_trains_on_teacher_minu
     assert [m["step"] for m in train_steps] == [1, 2]
     assert train_steps[0]["alpha/reverse_kl"] == pytest.approx(0.2)
     assert train_steps[0]["alpha/token_frac"] == pytest.approx(0.5)
+    assert train_steps[0]["advantage/clipped_frac"] == 0.0  # |0.2| is well inside the default clip of 5
     assert 0.0 <= train_steps[0]["alpha/sample_accuracy"] <= 1.0
     val_steps = [m["step"] for m in metrics if "val/mean_accuracy" in m]
     assert val_steps == [0, 1, 2]
@@ -134,6 +135,7 @@ def test_trainer_scoring_gives_the_same_signal(harness):
         {"teacher_scoring": "serverless"},
         {"max_prompt_length": 60},
         {"temperature": 0.0},
+        {"advantage_clip": 0.0},
         {"num_steps": 0},
         {"load_optimizer": False},  # weights-only resume needs a checkpoint to load
     ],

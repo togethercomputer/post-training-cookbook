@@ -26,6 +26,15 @@ def test_advantage_is_teacher_minus_student_scaled_by_kl_coef():
     np.testing.assert_allclose(c.reverse_kl, [-0.5, 1.0, 0.0])
 
 
+def test_advantage_clip_bounds_both_sides():
+    c = _completion(student=[-9.0, -0.1, -1.0], teacher=[-0.1, -9.0, -0.5])
+    assert token_advantages(c) == pytest.approx([8.9, -8.9, 0.5])
+    assert token_advantages(c, clip=5.0) == pytest.approx([5.0, -5.0, 0.5])
+    # Clipping applies to kl_coef * (teacher - student), before the balance weight.
+    sample = build_distillation_sample(c, kl_coef=1.0, advantage_clip=5.0, weight=2.0)
+    assert sample["loss_fn_inputs"]["advantages"]["data"][-3:] == pytest.approx([10.0, -10.0, 1.0])
+
+
 def test_completion_rejects_mismatched_lengths_and_empty_inputs():
     with pytest.raises(ValueError):
         Completion("d", [1], [5, 6], [-1.0], [-1.0, -1.0])

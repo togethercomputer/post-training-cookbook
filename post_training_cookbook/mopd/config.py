@@ -62,9 +62,11 @@ class MOPDConfig:
     adam_eps: float = 1e-8
     weight_decay: float = 0.0
 
-    # Distillation signal: advantage = kl_coef * (teacher logprob - student logprob), shared
-    # between domains per ``balance``.
+    # Distillation signal: advantage = kl_coef * (teacher logprob - student logprob), clipped to
+    # [-advantage_clip, +advantage_clip] (None disables; 5 follows Ma et al., arXiv:2606.30406) and
+    # shared between domains per ``balance``.
     kl_coef: float = 1.0
+    advantage_clip: float | None = 5.0
     balance: Balance = "token"
     teacher_scoring: TeacherScoring = "generator"
 
@@ -101,6 +103,8 @@ class MOPDConfig:
                 raise ValueError(f"{name} must be >= 1")
         if self.eval_interval < 0 or self.training_checkpoint_interval < 0:
             raise ValueError("eval_interval and training_checkpoint_interval must be >= 0 (0 disables)")
+        if self.advantage_clip is not None and self.advantage_clip <= 0:
+            raise ValueError(f"advantage_clip must be > 0 or None, got {self.advantage_clip}")
         if self.balance not in get_args(Balance):
             raise ValueError(f"balance must be one of {get_args(Balance)}, got {self.balance!r}")
         if self.teacher_scoring not in get_args(TeacherScoring):

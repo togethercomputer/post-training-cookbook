@@ -7,7 +7,8 @@ advantage is the negative reverse-KL estimate
 .. math::  A_t = \beta \, (\log \pi_{teacher}(x_t) - \log \pi_{student}(x_t)),
 
 which is positive where the teacher likes the token more than the student does and negative where
-it likes it less. One ``forward_backward`` with the built-in importance-sampling loss
+it likes it less. Clipping :math:`A_t` to :math:`[-c, c]` keeps a few tokens the teacher finds
+very unlikely from dominating a step. One ``forward_backward`` with the built-in importance-sampling loss
 (``-ratio * A`` per token, ``ratio = pi_trainer / pi_sampler``) then moves the student toward the
 teacher on exactly the tokens it produced. Only the sampled token's log-probability is used, which
 is what the service exposes: losses see one log-probability per position, not the full vocabulary.
@@ -80,9 +81,15 @@ class Completion:
         )
 
 
-def token_advantages(completion: Completion, *, kl_coef: float = 1.0) -> list[float]:
-    """``kl_coef * (teacher - student)`` log-probability for every completion token."""
-    return [float(-kl_coef * value) for value in completion.reverse_kl]
+def token_advantages(completion: Completion, *, kl_coef: float = 1.0, clip: float | None = None) -> list[float]:
+    """``kl_coef * (teacher - student)`` log-probability for every completion token.
+
+    With ``clip``, each advantage is clipped to ``[-clip, clip]``.
+    """
+    advantages = -kl_coef * completion.reverse_kl
+    if clip is not None:
+        advantages = np.clip(advantages, -clip, clip)
+    return [float(value) for value in advantages]
 
 
 def balance_weights(completions: Sequence[Completion], balance: Balance) -> list[float]:
@@ -107,16 +114,19 @@ def balance_weights(completions: Sequence[Completion], balance: Balance) -> list
     return [total / (num_domains * tokens_by_domain[completion.domain]) for completion in completions]
 
 
-def build_distillation_sample(completion: Completion, *, kl_coef: float = 1.0, weight: float = 1.0) -> Sample:
+def build_distillation_sample(
+    completion: Completion, *, kl_coef: float = 1.0, advantage_clip: float | None = None, weight: float = 1.0
+) -> Sample:
     """An importance-sampling training sample whose advantages are the per-token distillation signal.
 
     The prompt is masked out (weight 0, advantage 0); every completion token trains with advantage
-    ``weight * kl_coef * (teacher - student)``. The student's sampling log-probabilities go in the
-    ``logprobs`` row, so the loss's importance ratio corrects for any drift between the generator
-    and the trainer.
+    ``weight * kl_coef * (teacher - student)``, the ``kl_coef`` term clipped to
+    ``[-advantage_clip, advantage_clip]`` before the balance ``weight`` applies. The student's
+    sampling log-probabilities go in the ``logprobs`` row, so the loss's importance ratio corrects
+    for any drift between the generator and the trainer.
     """
     prompt_len = len(completion.prompt_tokens)
-    advantages = [weight * value for value in token_advantages(completion, kl_coef=kl_coef)]
+    advantages = [weight * value for value in token_advantages(completion, kl_coef=kl_coef, clip=advantage_clip)]
     return build_sample(
         tokens=completion.prompt_tokens + completion.completion_tokens,
         loss_mask=[0.0] * prompt_len + [1.0] * len(completion.completion_tokens),
