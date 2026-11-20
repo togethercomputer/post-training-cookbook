@@ -1,12 +1,13 @@
 """Teacher generation through a hosted chat-completions endpoint (Together serverless).
 
 Every completed request is appended to a JSONL cache keyed by ``TeacherRequest.key``, so an
-interrupted run resumes where it stopped and a rerun with the same keys makes no new calls. Keys
-don't include the model, so give each teacher model its own cache file.
+interrupted run resumes where it stopped and a rerun with the same keys makes no new calls. Each
+cached row records the teacher model, and a row is reused only for that model, so switching teachers
+never serves another model's outputs. A line torn by a crash mid-write is skipped with a warning.
 Requests run concurrently, ``TeacherConfig.concurrency`` at a time per API key. Listing several
 keys from separate projects in ``api_key_envs`` adds their rate limits together. Rate limits and
-transient errors are retried by the SDK (``max_retries``), and a request that still fails is cached
-with ``ok=False`` so the next run retries it.
+transient errors are retried by the SDK (``max_retries``), and an API or timeout error that still
+fails is cached with ``ok=False`` so the next run retries it. Any other exception is a bug and raises.
 """
 
 from __future__ import annotations
@@ -14,16 +15,19 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 import os
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
-from together import AsyncTogether
+from together import APIError, AsyncTogether
 
 from post_training_cookbook.types import Message
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -57,12 +61,13 @@ class TeacherConfig:
             raise ValueError("budget_usd needs price_per_million to estimate spend")
 
 
-class TeacherRequest(NamedTuple):
+@dataclass(frozen=True)
+class TeacherRequest:
     """One teacher call. ``key`` must be unique and stable across runs; it is the cache key."""
 
     key: str
     messages: list[Message]
-    meta: dict[str, Any] = {}
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,6 +79,8 @@ class TeacherOutput:
     finish_reason: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    # The teacher that wrote this row; a row is reused only for the same model.
+    model: str | None = None
 
     @property
     def truncated(self) -> bool:
@@ -95,15 +102,39 @@ class Spend:
 
 
 def load_cache(path: Path) -> dict[str, TeacherOutput]:
-    """Read a teacher cache; for a key written more than once, the last line wins."""
+    """Read a teacher cache; for a key written more than once, the last line wins.
+
+    A line that does not parse (typically the last one, torn by a crash mid-write) is skipped with a
+    warning, so the rows already paid for stay readable and the request is simply sent again.
+    """
     if not path.exists():
         return {}
     out: dict[str, TeacherOutput] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
             row = json.loads(line)
-            out[row["key"]] = TeacherOutput(**row)
+        except json.JSONDecodeError:
+            logger.warning("Skipping unreadable line %d of teacher cache %s", number, path)
+            continue
+        out[row["key"]] = TeacherOutput(**row)
     return out
+
+
+def _reusable(cached: TeacherOutput | None, config: TeacherConfig) -> bool:
+    return cached is not None and cached.ok and cached.model == config.model
+
+
+def _end_with_newline(path: Path) -> None:
+    """Start the next append on a fresh line if the file ends mid-line (a torn write)."""
+    if path.exists() and path.stat().st_size:
+        with path.open("rb") as f:
+            f.seek(-1, os.SEEK_END)
+            last = f.read(1)
+        if last != b"\n":
+            with path.open("a", encoding="utf-8") as f:
+                f.write("\n")
 
 
 def _api_keys(config: TeacherConfig) -> list[str]:
@@ -130,8 +161,8 @@ async def _call(client: Any, config: TeacherConfig, request: TeacherRequest) -> 
         kwargs["reasoning_effort"] = config.reasoning_effort
     try:
         resp = await client.chat.completions.create(**kwargs)
-    except Exception as exc:  # noqa: BLE001 — cached as a failure and retried on the next run
-        return TeacherOutput(key=request.key, ok=False, error=f"{type(exc).__name__}: {exc}"[:500])
+    except (APIError, TimeoutError) as exc:  # cached as a failure and retried on the next run
+        return TeacherOutput(key=request.key, ok=False, error=f"{type(exc).__name__}: {exc}"[:500], model=config.model)
     choice = resp.choices[0]
     message = choice.message
     usage = resp.usage.model_dump() if getattr(resp, "usage", None) is not None else {}
@@ -142,6 +173,7 @@ async def _call(client: Any, config: TeacherConfig, request: TeacherRequest) -> 
         reasoning_content=getattr(message, "reasoning_content", None) or getattr(message, "reasoning", None) or "",
         finish_reason=choice.finish_reason,
         usage=usage,
+        model=config.model,
     )
 
 
@@ -153,15 +185,20 @@ async def generate_async(
     client_factory: Callable[..., Any] = AsyncTogether,
     progress_every: int = 50,
 ) -> tuple[dict[str, TeacherOutput], Spend]:
-    """Run every request not already cached as ``ok``; return outputs for all requests and this run's spend."""
+    """Run every request not already cached as ``ok`` for this model; return this model's outputs and the spend."""
     requests = list({r.key: r for r in requests}.values())
     cache = load_cache(cache_path)
-    todo = [r for r in requests if not (r.key in cache and cache[r.key].ok)]
+    todo = [r for r in requests if not _reusable(cache.get(r.key), config)]
     spend = Spend()
+
+    def results() -> dict[str, TeacherOutput]:
+        return {r.key: cache[r.key] for r in requests if r.key in cache and cache[r.key].model == config.model}
+
     if not todo:
-        return {r.key: cache[r.key] for r in requests if r.key in cache}, spend
+        return results(), spend
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
+    _end_with_newline(cache_path)
     queue: asyncio.Queue[TeacherRequest] = asyncio.Queue()
     for r in todo:
         queue.put_nowait(r)
@@ -212,7 +249,7 @@ async def generate_async(
                     await result
     if stop.is_set():
         print(f"  teacher budget ${config.budget_usd} reached; {queue.qsize()} requests left unsent", flush=True)
-    return {r.key: cache[r.key] for r in requests if r.key in cache}, spend
+    return results(), spend
 
 
 def generate(

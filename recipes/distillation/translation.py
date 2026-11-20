@@ -12,6 +12,7 @@ mirror, which needs no token.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -247,12 +248,12 @@ def translation_rows(
     """
     requests = teacher_requests(lang, sources)
     outputs, spend = generate(requests, teacher, cache_dir / f"{lang}.jsonl")
-    for output in outputs.values():
-        output.content = clean(output.content)
+    # Clean copies, so the teacher's outputs (and anything holding them) are left as returned.
+    cleaned = {key: dataclasses.replace(output, content=clean(output.content)) for key, output in outputs.items()}
     filters = [not_an_echo]
     if lang in SCRIPTS:
         filters.append(in_script(SCRIPTS[lang], min_script_fraction))
-    rows, dropped = sft_rows(requests, outputs, filters=filters, keep_reasoning=False)
+    rows, dropped = sft_rows(requests, cleaned, filters=filters, keep_reasoning=False)
     print(
         f"{LANGUAGES[lang]}: {len(rows)} rows from {len(requests)} sources; dropped {dict(dropped)}; "
         f"this run's teacher spend ${spend.usd(teacher.price_per_million):.2f}",

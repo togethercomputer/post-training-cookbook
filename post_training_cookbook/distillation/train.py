@@ -48,20 +48,30 @@ class DistillResult:
 
 
 def render_rows(rows: Sequence[dict[str, Any]], codec: MessageCodec, max_length: int) -> tuple[list[Sample], int]:
-    """Render chat rows into cross-entropy samples; return the samples and how many rows were unrenderable."""
+    """Render chat rows into cross-entropy samples; return the samples and how many rows were unrenderable.
+
+    Each skipped row is logged with its id, its roles and the reason, the way SFT logs them.
+    """
     samples: list[Sample] = []
     dropped = 0
-    for row in rows:
+    for index, row in enumerate(rows):
+        row_id = row.get("id", index)
+        roles = [message["role"] for message in row["messages"]]
         try:
             built = build_conversation_samples(
                 row["messages"], codec=codec, train_on_what=TRAIN_ON_LAST, max_length=max_length
             )
-        except ValueError:
-            built = []
-        if built:
-            samples.extend(built)
-        else:
+        except ValueError as exc:
+            logger.warning("Skipping row %s: roles=%s — %s", row_id, roles, exc)
             dropped += 1
+            continue
+        if not built:
+            logger.warning(
+                "Skipping row %s: roles=%s — no trainable tokens within max_length=%d", row_id, roles, max_length
+            )
+            dropped += 1
+            continue
+        samples.extend(built)
     return samples, dropped
 
 

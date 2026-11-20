@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from together import APIConnectionError
 
 from post_training_cookbook.distillation.teacher import (
     Spend,
@@ -21,11 +23,12 @@ class FakeClient:
 
     instances: list[FakeClient] = []
 
-    def __init__(self, *, api_key, max_retries, timeout, fail_on=(), finish_reason="stop", reasoning=None):
+    def __init__(self, *, api_key, max_retries, timeout, fail_on=(), bug_on=(), finish_reason="stop", reasoning=None):
         self.api_key = api_key
         self.calls: list[dict] = []
         self.closed = False
         self.fail_on = set(fail_on)
+        self.bug_on = set(bug_on)
         self.finish_reason = finish_reason
         self.reasoning = reasoning
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
@@ -35,7 +38,9 @@ class FakeClient:
         self.calls.append(kwargs)
         prompt = kwargs["messages"][-1]["content"]
         if prompt in self.fail_on:
-            raise RuntimeError("upstream 503")
+            raise APIConnectionError(message="upstream 503", request=httpx.Request("POST", "https://api.together.xyz"))
+        if prompt in self.bug_on:
+            raise KeyError("a bug, not a transport error")
         message = SimpleNamespace(content=prompt.upper(), reasoning_content=self.reasoning)
         usage = SimpleNamespace(model_dump=lambda: {"prompt_tokens": 1_000, "completion_tokens": 1_000})
         return SimpleNamespace(
@@ -155,3 +160,41 @@ def test_config_validation() -> None:
 
 def test_spend_without_a_price_is_zero() -> None:
     assert Spend(input_tokens=10, output_tokens=10).usd(None) == 0.0
+
+
+def test_unexpected_exceptions_raise_instead_of_being_cached(tmp_path) -> None:
+    cache = tmp_path / "t.jsonl"
+    with pytest.raises(KeyError, match="a bug"):
+        generate(_requests("a"), _config(concurrency=1), cache, client_factory=_factory(bug_on={"a"}))
+    assert load_cache(cache) == {}
+
+
+def test_rows_from_another_teacher_are_not_reused(tmp_path) -> None:
+    cache = tmp_path / "t.jsonl"
+    generate(_requests("a"), _config(model="org/Old"), cache, client_factory=_factory())
+
+    outputs, spend = generate(_requests("a"), _config(model="org/New"), cache, client_factory=_factory())
+
+    assert spend.calls == 1
+    assert outputs["a"].model == "org/New"
+    # Switching back reuses nothing either: the last line for the key is now the new model's.
+    _, spend = generate(_requests("a"), _config(model="org/New"), cache, client_factory=_factory())
+    assert spend.calls == 0
+
+
+def test_a_torn_last_line_keeps_earlier_rows_and_the_next_append_is_readable(tmp_path) -> None:
+    cache = tmp_path / "t.jsonl"
+    generate(_requests("a", "b"), _config(), cache, client_factory=_factory())
+    with cache.open("a", encoding="utf-8") as f:
+        f.write('{"key": "c", "ok": tr')  # crash mid-write
+
+    assert set(load_cache(cache)) == {"a", "b"}
+
+    outputs, spend = generate(_requests("a", "b", "c"), _config(), cache, client_factory=_factory())
+    assert spend.calls == 1 and outputs["c"].content == "C"
+    assert set(load_cache(cache)) == {"a", "b", "c"}
+
+
+def test_request_meta_is_not_shared() -> None:
+    first, second = TeacherRequest(key="a", messages=[]), TeacherRequest(key="b", messages=[])
+    assert first.meta == {} and first.meta is not second.meta

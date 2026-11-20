@@ -86,13 +86,15 @@ def test_loss_is_logged_per_trained_token(monkeypatch, tmp_path) -> None:
     assert metrics["loss"] == pytest.approx(2.0 / metrics["trained_tokens"])
 
 
-def test_unrenderable_rows_fail_before_a_session_is_provisioned(monkeypatch, tmp_path) -> None:
+def test_unrenderable_rows_fail_before_a_session_is_provisioned(monkeypatch, tmp_path, caplog) -> None:
     _, factory, _ = _stub_remote(monkeypatch, tmp_path)
     prompt_only = [{"id": "x", "messages": [{"role": "user", "content": "q"}]}]
 
     with pytest.raises(ValueError, match="none of 1 rows rendered"):
         train.train(DistillConfig(model="org/M", batch_size=1), prompt_only)
     factory.assert_not_called()
+    # Each skipped row is logged with its id, roles and the reason.
+    assert "Skipping row x: roles=['user']" in caplog.text and "no assistant message" in caplog.text
 
 
 def test_too_few_rows_for_a_batch_fail_before_provisioning(monkeypatch, tmp_path) -> None:

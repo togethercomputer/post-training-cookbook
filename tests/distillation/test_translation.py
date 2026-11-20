@@ -112,12 +112,15 @@ def test_latin_script_languages_have_no_script_rate() -> None:
 
 
 def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_path) -> None:
+    returned = {}
+
     def fake_generate(requests, config, cache_path):
         assert cache_path == tmp_path / "lao_Laoo.jsonl"
         contents = {"One.": f'"{LAO[0]}"', "Two.": THAI[0], "Three.": "Three."}
-        return {
-            r.key: TeacherOutput(key=r.key, ok=True, content=contents[r.meta["source"]]) for r in requests
-        }, Spend()
+        returned.update(
+            {r.key: TeacherOutput(key=r.key, ok=True, content=contents[r.meta["source"]]) for r in requests}
+        )
+        return returned, Spend()
 
     monkeypatch.setattr(translation, "generate", fake_generate)
     teacher = TeacherConfig(model="org/Teacher")
@@ -126,6 +129,8 @@ def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_pa
 
     assert [r["meta"]["source"] for r in rows] == ["One."]
     assert rows[0]["messages"][-1] == {"role": "assistant", "content": LAO[0]}
+    # The teacher's outputs are cleaned into copies, not edited in place.
+    assert f'"{LAO[0]}"' in {output.content for output in returned.values()}
 
 
 def test_translation_eval_set_names() -> None:
