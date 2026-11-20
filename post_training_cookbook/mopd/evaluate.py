@@ -1,7 +1,7 @@
 """Score a session on each domain's held-out rows with greedy decoding.
 
 The fusion loop uses this for held-out monitoring, and the evaluation recipe uses it to fill the
-model-by-domain table: base model, each expert, the mixed baseline and the MOPD student, all
+model-by-domain table: base model, each expert and the MOPD student, all
 scored on the same rows with the same prompts and the same metric.
 """
 

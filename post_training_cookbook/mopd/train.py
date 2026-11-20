@@ -8,14 +8,14 @@ Each step:
 2. **Score.** Each completion goes to its domain's teacher, which scores the student's exact
    tokens teacher-forced (:mod:`post_training_cookbook.mopd.teachers`). Teachers score in parallel.
 3. **Train.** Per-token advantage ``kl_coef * (teacher - student)`` log-probability, clipped to
-   ``[-advantage_clip, advantage_clip]`` and shared between domains per ``balance``; one
-   ``forward_backward`` with the built-in importance-sampling loss, then ``optim_step`` (cosine
-   schedule) and ``weights_sync`` so the next step samples the updated student.
+   ``[-advantage_clip, advantage_clip]``; one ``forward_backward`` with the built-in
+   importance-sampling loss, then ``optim_step`` (cosine schedule) and ``weights_sync`` so the next
+   step samples the updated student.
 
 Per-domain metrics show what the student learns from each teacher: ``<domain>/reverse_kl`` (the
-per-token reverse-KL estimate, which falls as the student matches its teacher),
-``<domain>/token_frac`` (the domain's share of the step's completion tokens) and
-``<domain>/loss_weight_frac`` (its share of the update after balancing).
+per-token reverse-KL estimate, which falls as the student matches its teacher) and
+``<domain>/token_frac`` (the domain's share of the step's completion tokens). The loss sums over
+tokens, so ``token_frac`` is also the domain's share of the update.
 """
 
 from __future__ import annotations
@@ -46,12 +46,7 @@ from post_training_cookbook.codecs.base import MessageCodec
 from post_training_cookbook.datasets.registry import PromptExample, build_prompt_example
 from post_training_cookbook.grpo.loop import get_lr_cosine
 from post_training_cookbook.mopd.config import MOPDConfig
-from post_training_cookbook.mopd.distill import (
-    Completion,
-    balance_weights,
-    build_distillation_sample,
-    token_advantages,
-)
+from post_training_cookbook.mopd.distill import Completion, build_distillation_sample, token_advantages
 from post_training_cookbook.mopd.domains import Domain, load_splits
 from post_training_cookbook.mopd.evaluate import EvalItem, build_eval_items, evaluate_session
 from post_training_cookbook.mopd.teachers import open_teacher, score_with_generator, score_with_trainer
@@ -253,12 +248,9 @@ def _train_step(
         position[name] += 1
 
     # 3. Train: one importance-sampling pass on the per-token distillation advantages.
-    weights = balance_weights(completions, config.balance)
     samples = [
-        build_distillation_sample(
-            completion, kl_coef=config.kl_coef, advantage_clip=config.advantage_clip, weight=weight
-        )
-        for completion, weight in zip(completions, weights, strict=True)
+        build_distillation_sample(completion, kl_coef=config.kl_coef, advantage_clip=config.advantage_clip)
+        for completion in completions
     ]
     t0 = time.monotonic()
     fb = student.trainer.forward_backward(samples=samples, loss=_IMPORTANCE_SAMPLING, timeout=config.timeout)
@@ -278,7 +270,7 @@ def _train_step(
     student.trainer.weights_sync(timeout=config.timeout)
     optim_s = time.monotonic() - t0
 
-    metrics = _step_metrics(raw, completions, weights, codec, domains, config)
+    metrics = _step_metrics(raw, completions, codec, domains, config)
     metrics.update(
         {
             "loss": fb.loss,
@@ -305,20 +297,15 @@ def _train_step(
 def _step_metrics(
     raw: list[dict[str, Any]],
     completions: list[Completion],
-    weights: list[float],
     codec: MessageCodec,
     domains: Sequence[Domain],
     config: MOPDConfig,
 ) -> dict[str, Any]:
     total_tokens = sum(len(c.completion_tokens) for c in completions)
-    total_weight = sum(w * len(c.completion_tokens) for c, w in zip(completions, weights))
     all_kl = np.concatenate([c.reverse_kl for c in completions])
     raw_advantages = np.concatenate([-config.kl_coef * c.reverse_kl for c in completions])
     advantages = np.concatenate(
-        [
-            w * np.asarray(token_advantages(c, kl_coef=config.kl_coef, clip=config.advantage_clip))
-            for c, w in zip(completions, weights)
-        ]
+        [np.asarray(token_advantages(c, kl_coef=config.kl_coef, clip=config.advantage_clip)) for c in completions]
     )
     metrics: dict[str, Any] = {
         "reverse_kl": float(all_kl.mean()),
@@ -351,8 +338,6 @@ def _step_metrics(
                     np.mean([completions[i].reverse_kl.sum() for i in idx])
                 ),
                 f"{domain.name}/token_frac": tokens / total_tokens,
-                f"{domain.name}/loss_weight_frac": sum(weights[i] * len(completions[i].completion_tokens) for i in idx)
-                / total_weight,
                 f"{domain.name}/mean_completion_tokens": tokens / len(idx),
                 f"{domain.name}/truncated_rate": float(np.mean([raw[i]["truncated"] for i in idx])),
                 f"{domain.name}/sample_accuracy": float(np.mean(scores)),

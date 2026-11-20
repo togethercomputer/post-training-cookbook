@@ -8,7 +8,6 @@ from typing import Literal, get_args
 import yaml
 
 from post_training_cookbook.config import validate_resume
-from post_training_cookbook.mopd.distill import Balance
 
 __all__ = ["MOPDConfig", "TeacherScoring"]
 
@@ -63,11 +62,9 @@ class MOPDConfig:
     weight_decay: float = 0.0
 
     # Distillation signal: advantage = kl_coef * (teacher logprob - student logprob), clipped to
-    # [-advantage_clip, +advantage_clip] (None disables; 5 follows Ma et al., arXiv:2606.30406) and
-    # shared between domains per ``balance``.
+    # [-advantage_clip, +advantage_clip] (None disables; 5 follows Ma et al., arXiv:2606.30406).
     kl_coef: float = 1.0
     advantage_clip: float | None = 5.0
-    balance: Balance = "token"
     teacher_scoring: TeacherScoring = "generator"
 
     # Sampling. Temperature 1.0 keeps the student's samples, and so the reverse-KL estimate, on its
@@ -105,8 +102,6 @@ class MOPDConfig:
             raise ValueError("eval_interval and training_checkpoint_interval must be >= 0 (0 disables)")
         if self.advantage_clip is not None and self.advantage_clip <= 0:
             raise ValueError(f"advantage_clip must be > 0 or None, got {self.advantage_clip}")
-        if self.balance not in get_args(Balance):
-            raise ValueError(f"balance must be one of {get_args(Balance)}, got {self.balance!r}")
         if self.teacher_scoring not in get_args(TeacherScoring):
             choices = get_args(TeacherScoring)
             raise ValueError(f"teacher_scoring must be one of {choices}, got {self.teacher_scoring!r}")
@@ -120,7 +115,7 @@ class MOPDConfig:
         validate_resume(self)
 
     def run_name_suffix(self) -> str:
-        return f"{self.learning_rate:.2e}_{self.prompts_per_domain}x{self.samples_per_prompt}_{self.balance}"
+        return f"{self.learning_rate:.2e}_{self.prompts_per_domain}x{self.samples_per_prompt}"
 
     @classmethod
     def from_yaml(cls, path: str) -> MOPDConfig:

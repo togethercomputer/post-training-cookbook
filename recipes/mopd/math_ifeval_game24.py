@@ -6,8 +6,8 @@ every domain, and each answer is scored token by token by the expert for that pr
 Every expert, teacher and the student is a LoRA session on the same Qwen3.8-27B resource.
 
 1. Experts: one GRPO expert each for math (DeepMath-103K), instruction following (AllenAI
-   RLVR-IFEval) and Game of 24, trained concurrently, plus a GRPO baseline on all three domains
-   pooled. Each saves a training checkpoint every 10 steps and at the end.
+   RLVR-IFEval) and Game of 24, trained concurrently. Each saves a training checkpoint every 10
+   steps and at the end.
 2. Fusion: a fresh student plus one frozen teacher session per domain, started from the experts'
    final training checkpoints. Each step the student samples 4 answers to 16 prompts per domain,
    the routed teacher scores every token with ``prompt_logprobs``, and the student trains on the
@@ -17,11 +17,12 @@ Every expert, teacher and the student is a LoRA session on the same Qwen3.8-27B 
 Our run (made before the ±5 advantage clip was added; set ``advantage_clip=None`` in
 ``student_config`` to reproduce it exactly): the student scored 77.8 / 92.9 / 89.5 on math /
 instruction following / Game of 24, within 1.5 points of each expert on its own domain (79.0 /
-94.4 / 90.3), against 77.8 / 89.0 / 90.6 for the pooled GRPO baseline and 54.2 / 80.6 / 72.1 for
-the base model. The IFEval expert learned to game one constraint ("the letter e should appear 3
-times" answered with ``e e e``) and the student inherited it; read your experts' outputs before you
-distill them. Experts and baseline took 132 minutes, fusion 66 and evaluation 9: about $250 at
-$72/h.
+94.4 / 90.3), against 54.2 / 80.6 / 72.1 for the base model. The IFEval expert learned to game one
+constraint ("the letter e should appear 3 times" answered with ``e e e``) and the student
+inherited it; read your experts' outputs before you distill them. Estimated time and cost at
+$72/h: experts about 62 minutes, fusion about 33 and evaluation about 6, about $122 in all. (Our
+run shared the resource with other jobs, so these scale its measured times by this recipe's share
+of the work.)
 
 Requires TOGETHER_API_KEY. The resource is stopped when the script exits, even on error.
 
@@ -39,7 +40,7 @@ from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.mopd.config import MOPDConfig
 from post_training_cookbook.mopd.domains import default_domains
 from post_training_cookbook.mopd.evaluate import evaluate_test_splits
-from post_training_cookbook.mopd.experts import MIXED, expert_configs, train_experts
+from post_training_cookbook.mopd.experts import expert_configs, train_experts
 from post_training_cookbook.mopd.train import train
 from post_training_cookbook.multi_lora import model_resource
 
@@ -89,8 +90,6 @@ def student_config(model_resources_id: str, teacher_checkpoints: dict[str, str])
         prompts_per_domain=16,
         samples_per_prompt=4,
         learning_rate=5e-5,
-        # "domain" gives each domain a third of the loss weight; in our run it made no difference.
-        balance="token",
         max_model_length=MAX_MODEL_LENGTH,
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_sample_tokens=MAX_SAMPLE_TOKENS,
@@ -108,9 +107,9 @@ if __name__ == "__main__":
     with model_resource(model=MODEL, num_generator_replicas=1) as resources:
         rid = resources.model_resources_id
 
-        # 1. Experts and the pooled baseline, one session each, concurrently.
+        # 1. One expert per domain, one session each, concurrently.
         configs = expert_configs(
-            DOMAINS, expert, model_resources_id=rid, run_prefix=RUN_PREFIX, include_mixed=True, checkpoint_interval=10
+            DOMAINS, expert, model_resources_id=rid, run_prefix=RUN_PREFIX, checkpoint_interval=10
         )
         experts = train_experts(configs)
         failed = {name: run.error for name, run in experts.items() if run.error or not run.training_checkpoint_id}
@@ -122,8 +121,7 @@ if __name__ == "__main__":
         student = train(student_config(rid, teachers), DOMAINS)
 
         # 3. Every model on every domain's test split.
-        models = {"base": None, **teachers, MIXED: experts[MIXED].training_checkpoint_id}
-        models["student"] = student.training_checkpoint_id
+        models = {"base": None, **teachers, "student": student.training_checkpoint_id}
         summaries = evaluate_test_splits(
             resources,
             models,

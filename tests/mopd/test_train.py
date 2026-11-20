@@ -131,7 +131,6 @@ def test_trainer_scoring_gives_the_same_signal(harness):
         {"model": "m"},  # both model sources
         {"model_resources_id": None},  # neither
         {"teacher_checkpoints": {}},
-        {"balance": "prompt"},
         {"teacher_scoring": "serverless"},
         {"max_prompt_length": 60},
         {"temperature": 0.0},
@@ -148,18 +147,18 @@ def test_config_validation(overrides):
 def test_two_students_share_one_set_of_teachers(harness):
     from concurrent.futures import ThreadPoolExecutor
 
-    token = _config(num_steps=2, eval_interval=0, wandb_run_name="student-token")
-    domain = _config(num_steps=2, eval_interval=0, wandb_run_name="student-domain", balance="domain")
-    with train.teacher_sessions(harness, token) as teachers:
+    low = _config(num_steps=2, eval_interval=0, wandb_run_name="student-low-lr", learning_rate=1e-5)
+    high = _config(num_steps=2, eval_interval=0, wandb_run_name="student-high-lr", learning_rate=1e-4)
+    with train.teacher_sessions(harness, low) as teachers:
         assert set(teachers) == {"alpha", "beta"}
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(train.train_student, c, _domains(), harness, teachers) for c in (token, domain)]
+            futures = [pool.submit(train.train_student, c, _domains(), harness, teachers) for c in (low, high)]
             results = [f.result() for f in futures]
         assert not any(t.stopped for t in teachers.values())  # still open for the next student
     assert all(t.stopped for t in teachers.values())
     names = [s.create_kwargs["display_name"] for s in harness.sessions]
-    assert sorted(names) == ["student-domain", "student-token", "teacher-alpha", "teacher-beta"]
-    assert {r.run_dir.name for r in results} == {"student-token", "student-domain"}
+    assert sorted(names) == ["student-high-lr", "student-low-lr", "teacher-alpha", "teacher-beta"]
+    assert {r.run_dir.name for r in results} == {"student-low-lr", "student-high-lr"}
     # Each teacher scored both students' completions: 2 students x 2 steps.
     for teacher in teachers.values():
         assert len([c for c in teacher.generator.sample_calls if c["prompt_logprobs"]]) == 4

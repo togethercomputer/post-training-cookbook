@@ -3,7 +3,6 @@ import pytest
 
 from post_training_cookbook.mopd.distill import (
     Completion,
-    balance_weights,
     build_distillation_sample,
     token_advantages,
 )
@@ -30,9 +29,8 @@ def test_advantage_clip_bounds_both_sides():
     c = _completion(student=[-9.0, -0.1, -1.0], teacher=[-0.1, -9.0, -0.5])
     assert token_advantages(c) == pytest.approx([8.9, -8.9, 0.5])
     assert token_advantages(c, clip=5.0) == pytest.approx([5.0, -5.0, 0.5])
-    # Clipping applies to kl_coef * (teacher - student), before the balance weight.
-    sample = build_distillation_sample(c, kl_coef=1.0, advantage_clip=5.0, weight=2.0)
-    assert sample["loss_fn_inputs"]["advantages"]["data"][-3:] == pytest.approx([10.0, -10.0, 1.0])
+    sample = build_distillation_sample(c, kl_coef=1.0, advantage_clip=5.0)
+    assert sample["loss_fn_inputs"]["advantages"]["data"][-3:] == pytest.approx([5.0, -5.0, 0.5])
 
 
 def test_completion_rejects_mismatched_lengths_and_empty_inputs():
@@ -44,30 +42,9 @@ def test_completion_rejects_mismatched_lengths_and_empty_inputs():
         Completion("d", [], [5], [-1.0], [-1.0])
 
 
-def test_token_balance_is_uniform():
-    batch = [_completion("math", n=8), _completion("ifeval", n=2)]
-    assert balance_weights(batch, "token") == [1.0, 1.0]
-
-
-def test_domain_balance_equalizes_each_domains_total_weight_and_keeps_the_batch_total():
-    batch = [_completion("math", n=6), _completion("math", n=2), _completion("ifeval", n=2)]
-    weights = balance_weights(batch, "domain")
-    per_domain = {"math": 0.0, "ifeval": 0.0}
-    for c, w in zip(batch, weights):
-        per_domain[c.domain] += w * len(c.completion_tokens)
-    assert per_domain["math"] == pytest.approx(per_domain["ifeval"])
-    assert sum(per_domain.values()) == pytest.approx(10.0)  # total tokens unchanged
-    assert weights[0] == weights[1]  # same domain, same multiplier
-
-
-def test_unknown_balance_rejected():
-    with pytest.raises(ValueError):
-        balance_weights([_completion()], "sequence")
-
-
 def test_sample_aligns_advantages_and_logprobs_with_the_completion_slots():
     c = _completion(prompt=(1, 2, 3), student=[-1.0, -2.0], teacher=[-0.5, -2.5], n=2)
-    sample = build_distillation_sample(c, kl_coef=1.0, weight=2.0)
+    sample = build_distillation_sample(c, kl_coef=2.0)
     inputs = sample["loss_fn_inputs"]
     # 5 tokens -> 4 slots; slot i predicts token i + 1, so the completion is predicted by slots 2 and 3.
     assert sample["model_input"]["chunks"][0]["encoded_text"]["tokens"] == [1, 2, 3, 10]

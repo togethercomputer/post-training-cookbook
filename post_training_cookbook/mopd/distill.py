@@ -18,31 +18,14 @@ Everything here is pure, so it is unit-tested without a session.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
 
 import numpy as np
 from together.post_training import Sample
 
 from post_training_cookbook.samples import build_sample
 
-__all__ = [
-    "Balance",
-    "Completion",
-    "balance_weights",
-    "build_distillation_sample",
-    "token_advantages",
-]
-
-Balance = Literal["token", "domain"]
-"""How a step's loss is shared between domains.
-
-- ``"token"``: every completion token counts the same, so a domain's share of the update is its
-  share of the batch's tokens. Long-answer domains (math) dominate short-answer ones.
-- ``"domain"``: each domain's tokens are reweighted so every domain contributes the same total
-  weight, whatever its answer length.
-"""
+__all__ = ["Completion", "build_distillation_sample", "token_advantages"]
 
 
 @dataclass(frozen=True)
@@ -92,41 +75,18 @@ def token_advantages(completion: Completion, *, kl_coef: float = 1.0, clip: floa
     return [float(value) for value in advantages]
 
 
-def balance_weights(completions: Sequence[Completion], balance: Balance) -> list[float]:
-    """One multiplier per completion that applies the ``balance`` policy to its advantages.
-
-    Under ``"domain"``, a completion from domain ``d`` gets ``T / (D * T_d)``, where ``T`` is the
-    batch's completion-token count, ``T_d`` domain ``d``'s, and ``D`` the number of domains present.
-    Each domain's tokens then carry ``T / D`` total weight, and the batch total stays ``T``, so the
-    loss scale (and so the learning rate) is comparable with ``"token"``.
-    """
-    if balance == "token":
-        return [1.0] * len(completions)
-    if balance != "domain":
-        raise ValueError(f"unknown balance policy: {balance!r}")
-    tokens_by_domain: dict[str, int] = {}
-    for completion in completions:
-        tokens_by_domain[completion.domain] = tokens_by_domain.get(completion.domain, 0) + len(
-            completion.completion_tokens
-        )
-    total = sum(tokens_by_domain.values())
-    num_domains = len(tokens_by_domain)
-    return [total / (num_domains * tokens_by_domain[completion.domain]) for completion in completions]
-
-
 def build_distillation_sample(
-    completion: Completion, *, kl_coef: float = 1.0, advantage_clip: float | None = None, weight: float = 1.0
+    completion: Completion, *, kl_coef: float = 1.0, advantage_clip: float | None = None
 ) -> Sample:
     """An importance-sampling training sample whose advantages are the per-token distillation signal.
 
     The prompt is masked out (weight 0, advantage 0); every completion token trains with advantage
-    ``weight * kl_coef * (teacher - student)``, the ``kl_coef`` term clipped to
-    ``[-advantage_clip, advantage_clip]`` before the balance ``weight`` applies. The student's
-    sampling log-probabilities go in the ``logprobs`` row, so the loss's importance ratio corrects
-    for any drift between the generator and the trainer.
+    ``kl_coef * (teacher - student)``, clipped to ``[-advantage_clip, advantage_clip]``. The
+    student's sampling log-probabilities go in the ``logprobs`` row, so the loss's importance ratio
+    corrects for any drift between the generator and the trainer.
     """
     prompt_len = len(completion.prompt_tokens)
-    advantages = [weight * value for value in token_advantages(completion, kl_coef=kl_coef, clip=advantage_clip)]
+    advantages = token_advantages(completion, kl_coef=kl_coef, clip=advantage_clip)
     return build_sample(
         tokens=completion.prompt_tokens + completion.completion_tokens,
         loss_mask=[0.0] * prompt_len + [1.0] * len(completion.completion_tokens),
