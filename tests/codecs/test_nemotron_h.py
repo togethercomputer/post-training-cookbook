@@ -1,9 +1,9 @@
-"""Nemotron 3.5 codec: what the shared contract in test_codec.py cannot phrase generically.
+"""Nemotron 3.5 codecs (Super VL and Lightning): what the shared contract in test_codec.py cannot phrase generically.
 
-The shared suite renders Nemotron 3.5 with thinking off (``SHARED_SUITE_THINKING_OFF``), since its reasoning-free
+The shared suite renders both with thinking off (``SHARED_SUITE_THINKING_OFF``), since its reasoning-free
 turns do not extend a thinking-on prompt. These tests cover the thinking modes, that prefix break, the
-effort and history-reasoning flags, endpoint-split completions, and the turns the model samples
-(``NEMOTRON_35_SAMPLED_TURNS``, round-tripped by the shared suite).
+effort (Super VL only) and history-reasoning flags, endpoint-split completions, and the turns the models
+sample (``NEMOTRON_35_SAMPLED_TURNS``, round-tripped by the shared suite for both).
 """
 
 from __future__ import annotations
@@ -18,6 +18,9 @@ from post_training_cookbook.types import Message, ToolSpec
 from tests.codecs import REFERENCE_MODELS, TWO_TURN_CONVERSATION
 
 _MODEL = REFERENCE_MODELS["nemotron-3.5"]
+_LIGHTNING = REFERENCE_MODELS["nemotron-3.5-lightning"]
+# Both checkpoints share the thinking and history flags, tool-call grammar and stop token.
+_BOTH = pytest.mark.parametrize("model", [_MODEL, _LIGHTNING], ids=["super-vl", "lightning"])
 _EOS = "<|im_end|>"
 
 NEMOTRON_35_TOOLS: list[ToolSpec] = [
@@ -36,7 +39,7 @@ def _call(zip_code: str, n: int) -> str:
     )
 
 
-# Turns as the model samples them after each thinking mode's generation prompt, through the stop token.
+# Turns as both models sample them after each thinking mode's generation prompt, through the stop token.
 NEMOTRON_35_SAMPLED_TURNS: dict[bool | None, dict[str, str]] = {
     True: {
         "reasoning-then-call": "Need the zip lookup.</think>\n" + _call("02139", 2) + _EOS,
@@ -49,9 +52,9 @@ NEMOTRON_35_SAMPLED_TURNS: dict[bool | None, dict[str, str]] = {
 }
 
 
-@pytest.fixture(scope="module")
-def nemotron() -> Nemotron35Codec:
-    return get_codec(_MODEL)
+@pytest.fixture(scope="module", params=[_MODEL, _LIGHTNING], ids=["super-vl", "lightning"])
+def nemotron(request) -> Nemotron35Codec:
+    return get_codec(request.param)
 
 
 def _render(codec, messages: list[Message], **kwargs) -> str:
@@ -63,9 +66,10 @@ def _render(codec, messages: list[Message], **kwargs) -> str:
     [(None, "assistant\n<think>\n"), (True, "assistant\n<think>\n"), (False, "assistant\n<think></think>")],
     ids=["default", "enabled", "disabled"],
 )
-def test_gen_prompt_follows_thinking_mode(enable_thinking: bool | None, prompt_tail: str):
+@_BOTH
+def test_gen_prompt_follows_thinking_mode(model: str, enable_thinking: bool | None, prompt_tail: str):
     """Thinking is on unless turned off."""
-    codec = get_codec(_MODEL, enable_thinking=enable_thinking)
+    codec = get_codec(model, enable_thinking=enable_thinking)
     assert _render(codec, [Message(role="user", content="q")], add_generation_prompt=True).endswith(prompt_tail)
 
 
@@ -74,7 +78,7 @@ def test_reasoning_free_turn_needs_thinking_off_for_sft(nemotron: Nemotron35Code
     so SFT on reasoning-free conversations must turn thinking off."""
     with pytest.raises(ValueError, match="rewrote the assistant prompt"):
         render_conversation(TWO_TURN_CONVERSATION, codec=nemotron, train_on_what=TRAIN_ON_ALL, max_length=4096)
-    codec = get_codec(_MODEL, enable_thinking=False)
+    codec = get_codec(nemotron._CHECKPOINT, enable_thinking=False)
     assert len(render_conversation(TWO_TURN_CONVERSATION, codec=codec, train_on_what=TRAIN_ON_ALL, max_length=4096))
 
 
@@ -101,9 +105,10 @@ _HISTORY: list[Message] = [
 
 
 @pytest.mark.parametrize("preserve_thinking, keeps", [(None, False), (False, False), (True, True)])
-def test_history_reasoning_follows_preserve_thinking(preserve_thinking: bool | None, keeps: bool):
+@_BOTH
+def test_history_reasoning_follows_preserve_thinking(model: str, preserve_thinking: bool | None, keeps: bool):
     """The template truncates history reasoning by default; `preserve_thinking=True` turns that off."""
-    codec = get_codec(_MODEL, preserve_thinking=preserve_thinking)
+    codec = get_codec(model, preserve_thinking=preserve_thinking)
     assert ("earlier reasoning" in _render(codec, _HISTORY, add_generation_prompt=True)) is keeps
 
 
@@ -126,10 +131,31 @@ def test_medium_effort_splits_at_each_user_message(thinking_effort: str, one_seq
     assert (after[: len(before)] == before) is one_sequence
 
 
-def test_variants_render_with_the_pinned_checkpoint(nemotron: Nemotron35Codec):
-    """Every name that routes here renders with the pinned Super VL tokenizer and template."""
-    variant = get_codec("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8")
-    assert variant.encode_messages(_HISTORY, add_generation_prompt=True) == nemotron.encode_messages(
+@pytest.mark.parametrize("thinking_effort", ["medium", "high"])
+def test_lightning_has_no_effort_setting(thinking_effort: str):
+    """Lightning's template has no `medium_effort` flag, so no level can render."""
+    with pytest.raises(ValueError, match="Lightning has no thinking-effort setting"):
+        get_codec(_LIGHTNING, thinking_effort=thinking_effort)
+
+
+def test_lightning_renders_with_its_own_checkpoint():
+    """Lightning's tokenizer names Super VL's vision tokens `<SPECIAL_n>`, so `<image>` is one special token
+    only under Super VL; a Lightning codec loading Super VL's files would encode it as one."""
+    lightning, super_vl = get_codec(_LIGHTNING), get_codec(_MODEL)
+    assert len(super_vl.encode("<image>")) == 1
+    assert len(lightning.encode("<image>")) > 1
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ["nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-FP8"],
+    ids=["super-vl", "lightning"],
+)
+def test_variants_render_with_the_pinned_checkpoint(variant: str):
+    """Every name that routes to a codec renders with that codec's pinned tokenizer and template."""
+    codec = get_codec(variant)
+    reference = get_codec(codec._CHECKPOINT)
+    assert codec.encode_messages(_HISTORY, add_generation_prompt=True) == reference.encode_messages(
         _HISTORY, add_generation_prompt=True
     )
 
@@ -139,5 +165,7 @@ def test_parse_completion_matches_the_sampled_turn(nemotron: Nemotron35Codec):
     sampled = NEMOTRON_35_SAMPLED_TURNS[True]["reasoning-then-call"]
     expected = nemotron.parse_response(nemotron.encode(sampled), tools=NEMOTRON_35_TOOLS)
     content = "\n" + _call("02139", 2)
-    actual = parse_completion(_MODEL, content=content, reasoning="Need the zip lookup.", tools=NEMOTRON_35_TOOLS)
+    actual = parse_completion(
+        nemotron._CHECKPOINT, content=content, reasoning="Need the zip lookup.", tools=NEMOTRON_35_TOOLS
+    )
     assert actual == expected
