@@ -31,7 +31,7 @@ actions). There are two ways to cope, and they make opposite trade-offs:
 ``enable_thinking`` is the orthogonal on/off switch for thinking at all;
 ``preserve_thinking=True`` implies it, and a family whose template cannot turn
 thinking off (GLM-5, Muse Spark) rejects ``False``. ``thinking_effort`` picks a family's
-reasoning-budget level where the template has one (GLM-5, Kimi-K3, Muse Spark, Nemotron 3.5); ``None``
+reasoning-budget level where the template has one (GLM-5, Kimi-K3, Muse Spark, Nemotron 3.5 Super VL); ``None``
 keeps the template default, and families without the setting reject any value.
 """
 
