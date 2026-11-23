@@ -141,8 +141,10 @@ def test_lightning_has_no_effort_setting(thinking_effort: str):
 @pytest.mark.parametrize(
     "name, image_tokens",
     [
+        ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B", 1),
         ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16", 1),
         ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", 1),
+        ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B", 3),
         ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16", 3),
         ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-FP8", 3),
     ],
