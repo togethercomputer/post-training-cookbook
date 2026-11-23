@@ -20,10 +20,12 @@ they read:
   ``chat_template_kwargs={"medium_effort": true}``: SGLang does not map ``reasoning_effort="medium"`` to
   this flag for this template, and the template ignores ``reasoning_effort``.
 
-Lightning's template has no effort flag, so its codec rejects any ``thinking_effort``. It renders content
-as a plain string: a ``None`` or list-of-parts content renders literally (``None``, a Python repr) where
-Super VL renders the text. Its tokenizer names Super VL's vision tokens (ids 18-29: ``<image>``, ``<box>``…)
-``<SPECIAL_n>``, so those literal strings tokenize as ordinary text; all other text tokenizes the same.
+Lightning's template has no effort flag, so its codec rejects any ``thinking_effort``. It also concatenates
+content as a plain string where Super VL's ``render_content`` coerces it: a ``None`` system message raises
+``TypeError`` and a ``None`` user or tool message renders the word ``None``, so the Lightning codec passes
+``None`` content as ``""``, which is how Super VL renders it. List-of-parts content is not supported.
+Its tokenizer names Super VL's vision tokens (ids 18-29: ``<image>``, ``<box>``…) ``<SPECIAL_n>``, so those
+literal strings tokenize as ordinary text; all other text tokenizes the same.
 
 Each tokenizer and template is pinned to the revision Together's RL catalog serves, so every name that
 routes to a codec (BF16, FP8 and other precisions) renders with the same files. Other Nemotron 3.5 models
@@ -96,7 +98,10 @@ class Nemotron35Codec(NestedXmlCodec):
         # The template adds the effort hint with thinking off too, so it is passed regardless of enable_thinking.
         if self._thinking_effort is not None:
             kwargs["medium_effort"] = self._thinking_effort == "medium"
-        return self._tokenizer.apply_chat_template(messages_for_template(messages), **kwargs)["input_ids"]
+        return self._tokenizer.apply_chat_template(self._template_messages(messages), **kwargs)["input_ids"]
+
+    def _template_messages(self, messages: list[Message]) -> list[dict]:
+        return messages_for_template(messages)
 
 
 class Nemotron35LightningCodec(Nemotron35Codec):
@@ -106,3 +111,9 @@ class Nemotron35LightningCodec(Nemotron35Codec):
     _REVISION = NEMOTRON_35_LIGHTNING_REVISION
     _THINKING_EFFORTS = ()
     _FAMILY = "Nemotron 3.5 Lightning"
+
+    def _template_messages(self, messages: list[Message]) -> list[dict]:
+        # The template concatenates content with `+` and `| string`, so None would crash or render "None".
+        return [
+            {**m, "content": ""} if m.get("content", "") is None else m for m in super()._template_messages(messages)
+        ]

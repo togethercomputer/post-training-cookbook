@@ -138,26 +138,30 @@ def test_lightning_has_no_effort_setting(thinking_effort: str):
         get_codec(_LIGHTNING, thinking_effort=thinking_effort)
 
 
-def test_lightning_renders_with_its_own_checkpoint():
-    """Lightning's tokenizer names Super VL's vision tokens `<SPECIAL_n>`, so `<image>` is one special token
-    only under Super VL; a Lightning codec loading Super VL's files would encode it as one."""
-    lightning, super_vl = get_codec(_LIGHTNING), get_codec(_MODEL)
-    assert len(super_vl.encode("<image>")) == 1
-    assert len(lightning.encode("<image>")) > 1
-
-
 @pytest.mark.parametrize(
-    "variant",
-    ["nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-FP8"],
-    ids=["super-vl", "lightning"],
+    "name, image_tokens",
+    [
+        ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16", 1),
+        ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", 1),
+        ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16", 3),
+        ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-FP8", 3),
+    ],
 )
-def test_variants_render_with_the_pinned_checkpoint(variant: str):
-    """Every name that routes to a codec renders with that codec's pinned tokenizer and template."""
-    codec = get_codec(variant)
-    reference = get_codec(codec._CHECKPOINT)
-    assert codec.encode_messages(_HISTORY, add_generation_prompt=True) == reference.encode_messages(
-        _HISTORY, add_generation_prompt=True
-    )
+def test_every_name_renders_with_its_models_checkpoint(name: str, image_tokens: int):
+    """`<image>` is one special token only in Super VL's vocabulary (Lightning names id 18 `<SPECIAL_18>`), so it
+    tells the two checkpoints' files apart: a Lightning name loading Super VL's files, or the reverse, fails."""
+    assert len(get_codec(name).encode("<image>")) == image_tokens
+
+
+@_BOTH
+@pytest.mark.parametrize("role", ["system", "user", "tool", "assistant"])
+def test_none_content_renders_empty(model: str, role: str):
+    """Lightning's template would raise on a `None` system message and print `None` for a user or tool one;
+    both codecs render it as empty content."""
+    codec = get_codec(model, enable_thinking=False)
+    none = _render(codec, [Message(role=role, content=None)])
+    assert none == _render(codec, [Message(role=role, content="")])
+    assert "None" not in none
 
 
 def test_parse_completion_matches_the_sampled_turn(nemotron: Nemotron35Codec):
