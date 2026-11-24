@@ -24,20 +24,21 @@ REQUIRED_BY_DEMOS = {
     ),
 }
 
-# The demos skip checkpointing, but the README's Checkpoints section says these are mapped.
+# The demos skip checkpointing, but the wrapper maps these.
 CHECKPOINTING = {
-    "ServiceClient": ("create_training_client_from_state", "create_training_client_from_state_with_optimizer"),
+    "ServiceClient": (
+        "create_training_client_from_state",
+        "create_training_client_from_state_async",
+        "create_training_client_from_state_with_optimizer",
+        "create_training_client_from_state_with_optimizer_async",
+    ),
     "TrainingClient": ("save_state", "save_state_async", "save_weights_for_sampler", "save_weights_for_sampler_async"),
 }
 
-# The README lists these as not mapped. Assert their absence, otherwise the claim rots silently
-# once the wrapper grows the methods.
+# The migration guide (https://docs.together.ai/docs/post-training/migrate-from-tinker) lists these as not
+# mapped. Assert their absence, otherwise the claim rots silently once the wrapper grows the methods.
 UNSUPPORTED = {
-    "ServiceClient": (
-        "create_training_client_from_state_async",
-        "create_training_client_from_state_with_optimizer_async",
-        "create_sampling_client",
-    ),
+    "ServiceClient": ("create_sampling_client",),
     "TrainingClient": ("load_state", "load_state_with_optimizer", "create_sampling_client"),
 }
 

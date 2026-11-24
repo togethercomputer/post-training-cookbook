@@ -32,6 +32,7 @@ REFERENCE_MODELS: dict[str, str] = {
     "minimax-m3": "MiniMaxAI/MiniMax-M3",
     "muse-spark": "meta-models/Muse-Spark-Open-816B-A42B",
     "nemotron-3.5": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+    "nemotron-3.5-lightning": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
 }
 
 # GLM-5.3's and Muse Spark's templates have no thinking-off mode, so their codecs reject it.
@@ -40,7 +41,7 @@ THINKING_OFF_MODELS = [model for family, model in REFERENCE_MODELS.items() if fa
 # Nemotron 3.5 primes thinking with `<think>\n` but re-renders a reasoning-free turn as `<think></think>`, so
 # the shared suite's reasoning-free turns are prefix-stable only with thinking off. test_nemotron_h.py covers
 # thinking on.
-SHARED_SUITE_THINKING_OFF = {REFERENCE_MODELS["nemotron-3.5"]}
+SHARED_SUITE_THINKING_OFF = {REFERENCE_MODELS["nemotron-3.5"], REFERENCE_MODELS["nemotron-3.5-lightning"]}
 
 # Shared by the format-specific arg-parser suites, so every parser is provably
 # tested against the identical declared schema.

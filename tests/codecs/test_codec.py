@@ -18,6 +18,7 @@ from post_training_cookbook.codecs import (
     MiniMaxM3Codec,
     MuseSparkCodec,
     Nemotron35Codec,
+    Nemotron35LightningCodec,
     Qwen35Codec,
     get_codec,
     parse_completion,
@@ -55,6 +56,7 @@ _KEEPS_HISTORY_REASONING: dict[str, bool] = {
     REFERENCE_MODELS["minimax-m3"]: True,
     REFERENCE_MODELS["muse-spark"]: True,
     REFERENCE_MODELS["nemotron-3.5"]: False,
+    REFERENCE_MODELS["nemotron-3.5-lightning"]: False,
 }
 
 
@@ -273,6 +275,7 @@ _SAMPLED_TURN_FAMILIES = {
     "minimax-m3": (MINIMAX_M3_SAMPLED_TURNS, MINIMAX_M3_TOOLS),
     "muse-spark": (MUSE_SPARK_SAMPLED_TURNS, MUSE_SPARK_TOOLS),
     "nemotron-3.5": (NEMOTRON_35_SAMPLED_TURNS, NEMOTRON_35_TOOLS),
+    "nemotron-3.5-lightning": (NEMOTRON_35_SAMPLED_TURNS, NEMOTRON_35_TOOLS),
 }
 
 
@@ -577,6 +580,7 @@ _STOP_TOKENS: dict[str, tuple[str, ...]] = {
     # Muse Spark closes a turn with `<|eot|>`; `<|eom|>` between its channels does not stop sampling.
     REFERENCE_MODELS["muse-spark"]: ("<|eot|>",),
     REFERENCE_MODELS["nemotron-3.5"]: ("<|im_end|>",),
+    REFERENCE_MODELS["nemotron-3.5-lightning"]: ("<|im_end|>",),
 }
 
 
@@ -608,6 +612,8 @@ _THINKING_EFFORTS: dict[str, tuple[tuple[str, ...], str | None]] = {
     REFERENCE_MODELS["minimax-m3"]: ((), None),
     REFERENCE_MODELS["muse-spark"]: (("low", "medium", "high", "xhigh"), "xhigh"),
     REFERENCE_MODELS["nemotron-3.5"]: (("medium", "high"), "high"),
+    # Lightning's template has no effort flag.
+    REFERENCE_MODELS["nemotron-3.5-lightning"]: ((), None),
 }
 
 
@@ -625,7 +631,7 @@ def test_thinking_effort(model: str):
         assert _gen_prompt(model) == renders[default]
 
 
-# Nemotron 3.5's template adds its effort hint with thinking off too (test_nemotron_h.py).
+# Nemotron 3.5 Super VL's template adds its effort hint with thinking off too (test_nemotron_h.py).
 @pytest.mark.parametrize(
     "model", [model for model in THINKING_OFF_MODELS if model != REFERENCE_MODELS["nemotron-3.5"]]
 )
@@ -671,6 +677,8 @@ class TestCodecRouting:
             ("meta-models/Muse-Spark-Open-816B-A42B-NVFP4", MuseSparkCodec),
             ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16", Nemotron35Codec),
             ("nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-FP8", Nemotron35Codec),
+            ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16", Nemotron35LightningCodec),
+            ("nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-FP8", Nemotron35LightningCodec),
         ],
     )
     def test_resolves_expected_codec(self, model: str, expected: type[MessageCodec]):
@@ -686,7 +694,7 @@ class TestCodecRouting:
             # does not model, so neither may route to it.
             "zai-org/GLM-4.6",
             "zai-org/GLM-5.2",
-            # Other Nemotron 3.5 models ship their own tokenizers, so they may not route to the Super VL codec.
+            # Other Nemotron 3.5 models ship their own tokenizers, so they may not route to a Nemotron 3.5 codec.
             "nvidia/NVIDIA-Nemotron-3.5-Nano-30B-A3B-BF16",
         ],
     )
