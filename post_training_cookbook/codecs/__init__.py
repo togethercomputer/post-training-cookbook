@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from post_training_cookbook.codecs.base import MessageCodec, PreserveThinkingForkedWarning
+from post_training_cookbook.codecs.deepseek_v41 import DeepSeekV41Codec
 from post_training_cookbook.codecs.glm5 import Glm5Codec
 from post_training_cookbook.codecs.kimi_k3 import KimiK3Codec
 from post_training_cookbook.codecs.minimax_m3 import MiniMaxM3Codec
@@ -10,6 +11,7 @@ from post_training_cookbook.codecs.qwen3_5 import Qwen35Codec
 from post_training_cookbook.types import Message, ToolSpec
 
 __all__ = [
+    "DeepSeekV41Codec",
     "Glm5Codec",
     "KimiK3Codec",
     "MessageCodec",
@@ -28,6 +30,7 @@ __all__ = [
 # "nvidia-nemotron-3.5-super-vl" and "nvidia-nemotron-3.5-lightning" match those checkpoints and their
 # precisions. Each Nemotron 3.5 model ships its own tokenizer, so there is no bare "nvidia-nemotron-3.5" prefix.
 _CODECS: list[tuple[str, type[MessageCodec]]] = [
+    ("deepseek-v4.1-flash", DeepSeekV41Codec),
     ("glm-5.3", Glm5Codec),
     ("kimi-k3", KimiK3Codec),
     ("minimax-m3", MiniMaxM3Codec),
@@ -73,6 +76,7 @@ def get_codec(
 
     ``thinking_effort`` is family-specific (``low``/``high``/``max`` for Kimi-K3 and GLM-5,
     ``low``/``medium``/``high``/``xhigh`` for Muse Spark, ``medium``/``high`` for Nemotron 3.5 Super VL);
+    DeepSeek-V4.1 accepts ``low``/``high``/``max`` or a string integer 1-100;
     ``None`` keeps the template default, and families without one reject any value.
     """
     return resolve_codec_class(model_name)(

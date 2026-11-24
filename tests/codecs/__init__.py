@@ -25,6 +25,7 @@ from post_training_cookbook.sequence_split import TrainableSequence
 from post_training_cookbook.types import Message, ToolSpec
 
 REFERENCE_MODELS: dict[str, str] = {
+    "deepseek-v4.1-flash": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
     "qwen3.5": "Qwen/Qwen3.5-0.8B",
     "glm-5": "zai-org/GLM-5.3",
     "kimi-k3": "moonshotai/Kimi-K3",
