@@ -76,6 +76,7 @@ def get_codec(
 
     ``thinking_effort`` is family-specific (``low``/``high``/``max`` for Kimi-K3 and GLM-5,
     ``low``/``medium``/``high``/``xhigh`` for Muse Spark, ``medium``/``high`` for Nemotron 3.5 Super VL);
+    DeepSeek-V4.1 accepts ``low``/``high``/``max`` or a string integer 1-100;
     ``None`` keeps the template default, and families without one reject any value.
     """
     return resolve_codec_class(model_name)(
