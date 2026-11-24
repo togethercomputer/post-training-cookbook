@@ -34,7 +34,7 @@ post_training_cookbook/
     minimax_m3.py    MiniMaxM3Codec implementation
     muse_spark.py    MuseSparkCodec implementation
     nested_xml.py    NestedXmlCodec: shared nested-XML tool-call parsing (Qwen3.5, Nemotron 3.5)
-    nemotron_h.py    Nemotron35Codec implementation (Nemotron 3.5 Super VL)
+    nemotron_h.py    Nemotron35Codec (Nemotron 3.5 Super VL) and Nemotron35LightningCodec (Lightning)
     qwen3_5.py       Qwen35Codec implementation (Qwen3.5, 3.6, and 3.8)
     chat_templates/  Forked Jinja templates for preserve_thinking
     __init__.py      get_codec(model_name) factory
@@ -637,8 +637,8 @@ message, parse_ok = codec.parse_response(response_tokens)
 - `kimi-k3` → `KimiK3Codec`.
 - `minimax-m3` → `MiniMaxM3Codec` (for example, `MiniMaxAI/MiniMax-M3`). Its template omits a `null` tool-call argument, so a parsed call has no such key.
 - `muse-spark-open` → `MuseSparkCodec` (`meta-models/Muse-Spark-Open-816B-A42B`). The checkpoint repo is gated on the Hugging Face Hub, so loading its tokenizer needs an `hf_token` whose account has been granted access.
-- `nvidia-nemotron-3.5-super-vl` → `Nemotron35Codec` (`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16` and its other precisions; other Nemotron 3.5 models are not supported). It renders with the checkpoint's own template at a pinned revision and parses the Qwen3.5 XML tool-call body. Thinking is on by default, so SFT on data without reasoning needs `enable_thinking=False`. `thinking_effort="medium"` adds the template's efficient-reasoning hint to the last user message, with thinking on or off, and so splits a multi-turn episode at every user message; `"high"` is the default. To serve a model trained with `"medium"` on the same prompts, chat-completions requests must send `chat_template_kwargs={"medium_effort": true}`; SGLang does not map `reasoning_effort="medium"` to it for this template.
-- `deepseek-v4.1-flash` → `DeepSeekV41Codec` (`deepseek-ai/DeepSeek-V4.1-Flash-1017` and V4.1-Flash). It renders through the release's own chat template from the pinned tokenizer. Only string message content is supported; content blocks and multimodal inputs raise `ValueError`. Thinking defaults to `high` (75); `thinking_effort` accepts `low`/`high`/`max` or a string integer 1–100. Tool loops keep reasoning in history; without tools, use `preserve_thinking=True` to retain earlier turns. Set `enable_thinking=False` for SFT data without reasoning.
+- `nvidia-nemotron-3.5-super-vl` → `Nemotron35Codec` (`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16` and its other precisions). It renders with the checkpoint's own template at a pinned revision and parses the Qwen3.5 XML tool-call body. Thinking is on by default, so SFT on data without reasoning needs `enable_thinking=False`. `thinking_effort="medium"` adds the template's efficient-reasoning hint to the last user message, with thinking on or off, and so splits a multi-turn episode at every user message; `"high"` is the default. To serve a model trained with `"medium"` on the same prompts, chat-completions requests must send `chat_template_kwargs={"medium_effort": true}`; SGLang does not map `reasoning_effort="medium"` to it for this template.
+- `nvidia-nemotron-3.5-lightning` → `Nemotron35LightningCodec` (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16` and its other precisions). Same thinking and history flags, tool-call grammar and stop token as Super VL, rendered with Lightning's own tokenizer and template at a pinned revision. Its template has no effort flag, so any `thinking_effort` is rejected. Other Nemotron 3.5 models (Nano) are not supported.
 
 The registered prefixes in `post_training_cookbook/codecs/__init__.py` are the source of truth. An unrecognized model raises `ValueError`. To add a new model family, implement the `MessageCodec` protocol and register it in `post_training_cookbook/codecs/__init__.py`.
 
