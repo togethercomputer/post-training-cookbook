@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from post_training_cookbook.distillation.teacher import Spend, TeacherConfig, TeacherOutput, TeacherRequest
+from post_training_cookbook.distillation.teacher import Spend, TeacherConfig, TeacherOutput
 
 # The translation helpers are recipe code (recipes/distillation/ is not a package), so load the file by path.
 _PATH = Path(__file__).resolve().parents[2] / "recipes" / "distillation" / "translation.py"
@@ -31,29 +31,11 @@ def _flores(monkeypatch):
     monkeypatch.setattr(translation, "flores_lines", lambda lang, split: FLORES[(lang, split)])
 
 
-def _request(key: str, source: str = "hello") -> TeacherRequest:
-    return TeacherRequest(key=key, messages=[{"role": "user", "content": source}], meta={"source": source})
-
-
 def test_script_fraction_counts_letters_only() -> None:
     assert translation.script_fraction(LAO[0], "LAO") == 1.0
     assert translation.script_fraction(THAI[0], "LAO") == 0.0
     assert translation.script_fraction("123 !!", "LAO") == 0.0
     assert 0.0 < translation.script_fraction(f"{LAO[0]} Obama", "LAO") < 1.0
-
-
-def test_in_script_rejects_the_neighbouring_script() -> None:
-    keep_lao = translation.in_script("LAO")
-    assert keep_lao.__name__ == "in_script_lao"
-    assert keep_lao(_request("k"), TeacherOutput(key="k", ok=True, content=LAO[0]))
-    assert not keep_lao(_request("k"), TeacherOutput(key="k", ok=True, content=THAI[0]))
-
-
-def test_not_an_echo() -> None:
-    output = TeacherOutput(key="k", ok=True, content=" hello there ")
-    assert not translation.not_an_echo(_request("k", "Hello there"), output)
-    assert translation.not_an_echo(_request("k", "Hello there"), TeacherOutput(key="k", ok=True, content=LAO[0]))
-    assert translation.not_an_echo(TeacherRequest(key="k", messages=[]), TeacherOutput(key="k", ok=True, content="x"))
 
 
 def test_prompt_wording_is_stable() -> None:
@@ -111,12 +93,12 @@ def test_latin_script_languages_have_no_script_rate() -> None:
     assert translation.translation_metrics([], []) == {}
 
 
-def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_path) -> None:
+def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_path, capsys) -> None:
     returned = {}
 
     def fake_generate(requests, config, cache_path):
         assert cache_path == tmp_path / "lao_Laoo.jsonl"
-        contents = {"One.": f'"{LAO[0]}"', "Two.": THAI[0], "Three.": "Three."}
+        contents = {"One.": f'"{LAO[0]}"', "Two.": THAI[0], "Three.": " three. "}
         returned.update(
             {r.key: TeacherOutput(key=r.key, ok=True, content=contents[r.meta["source"]]) for r in requests}
         )
@@ -129,6 +111,7 @@ def test_translation_rows_filter_the_wrong_script_and_echoes(monkeypatch, tmp_pa
 
     assert [r["meta"]["source"] for r in rows] == ["One."]
     assert rows[0]["messages"][-1] == {"role": "assistant", "content": LAO[0]}
+    assert "'wrong_script': 1, 'echo': 1" in capsys.readouterr().out
     # The teacher's outputs are cleaned into copies, not edited in place.
     assert f'"{LAO[0]}"' in {output.content for output in returned.values()}
 

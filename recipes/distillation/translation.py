@@ -27,7 +27,7 @@ import sacrebleu
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
 
-from post_training_cookbook.distillation.data import Filter, sft_rows
+from post_training_cookbook.distillation.data import sft_rows
 from post_training_cookbook.distillation.evaluate import EvalSet
 from post_training_cookbook.distillation.teacher import TeacherConfig, TeacherOutput, TeacherRequest, generate
 from post_training_cookbook.types import Message
@@ -75,26 +75,6 @@ def script_fraction(text: str, script: str) -> float:
     if not letters:
         return 0.0
     return sum(unicodedata.name(ch, "").startswith(script) for ch in letters) / len(letters)
-
-
-def in_script(script: str, min_fraction: float = 0.7) -> Filter:
-    """Keep outputs whose letters are at least ``min_fraction`` in ``script``.
-
-    Catches a teacher that answered in the wrong language or script. Names written in Latin
-    script lower the fraction, which is why the default leaves room for them.
-    """
-
-    def keep(request: TeacherRequest, output: TeacherOutput) -> bool:
-        return script_fraction(output.content, script) >= min_fraction
-
-    keep.__name__ = f"in_script_{script.lower()}"
-    return keep
-
-
-def not_an_echo(request: TeacherRequest, output: TeacherOutput) -> bool:
-    """Drop outputs that repeat ``request.meta["source"]`` (a teacher that echoed instead of translating)."""
-    source = request.meta.get("source")
-    return source is None or output.content.strip().casefold() != str(source).strip().casefold()
 
 
 def translation_messages(lang: str, text: str) -> list[Message]:
@@ -241,10 +221,17 @@ def translation_rows(
     outputs, spend = generate(requests, teacher, cache_dir / f"{lang}.jsonl")
     # Clean copies, so the teacher's outputs (and anything holding them) are left as returned.
     cleaned = {key: dataclasses.replace(output, content=clean(output.content)) for key, output in outputs.items()}
-    filters = [not_an_echo]
-    if lang in SCRIPTS:
-        filters.append(in_script(SCRIPTS[lang], min_script_fraction))
-    rows, dropped = sft_rows(requests, cleaned, filters=filters, keep_reasoning=False)
+    script = SCRIPTS.get(lang)
+
+    def reject_reason(request: TeacherRequest, output: TeacherOutput) -> str | None:
+        source = request.meta["source"]
+        if output.content.casefold() == source.strip().casefold():
+            return "echo"
+        if script is not None and script_fraction(output.content, script) < min_script_fraction:
+            return "wrong_script"
+        return None
+
+    rows, dropped = sft_rows(requests, cleaned, reject_reason=reject_reason, keep_reasoning=False)
     print(
         f"{LANGUAGES[lang]}: {len(rows)} rows from {len(requests)} sources; dropped {dict(dropped)}; "
         f"this run's teacher spend ${spend.usd(teacher.price_per_million):.2f}",
