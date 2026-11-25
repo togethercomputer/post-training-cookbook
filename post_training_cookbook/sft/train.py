@@ -7,6 +7,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from pathlib import Path
 from typing import Any
 
 import datasets
@@ -14,11 +15,10 @@ from dotenv import load_dotenv
 from together.post_training import AdamParams, LossConfig, Sample
 
 from post_training_cookbook.codecs import MessageCodec, get_codec
-from post_training_cookbook.config import lora_config_from, session_metadata_from
-from post_training_cookbook.multi_lora import resolve_base_model, training_session
+from post_training_cookbook.multi_lora import resolve_base_model, training_session_from
 from post_training_cookbook.run_artifacts import (
     checkpoint_if_due,
-    latest_checkpoint_ref,
+    claim_run_dir,
     log_step,
     track_run,
 )
@@ -179,11 +179,12 @@ def _build_batch_samples(
     return samples
 
 
-def train(config: SFTConfig, *, to_messages: RowToMessages = messages_column) -> str | None:
-    """Run SFT and return the latest training-checkpoint id, if one was saved.
+def train(config: SFTConfig, *, to_messages: RowToMessages = messages_column) -> Path:
+    """Run SFT and return the run-artifact directory.
 
     ``to_messages`` maps a dataset row to the conversation it trains on; any task
-    instruction the model should learn belongs in that mapping.
+    instruction the model should learn belongs in that mapping. Training-checkpoint
+    ids live in the run's ``checkpoints.jsonl`` (see ``latest_checkpoint_ref``).
     """
     load_dotenv(override=True)
     codec = get_codec(
@@ -206,19 +207,10 @@ def train(config: SFTConfig, *, to_messages: RowToMessages = messages_column) ->
         )
     to_messages(dataset[0])  # A schema mismatch should fail here, before a session is provisioned.
 
+    run_dir = claim_run_dir(config, kind="sft")
     with (
-        training_session(
-            model=config.model,
-            model_resources_id=config.model_resources_id,
-            display_name=config.wandb_run_name,
-            metadata=session_metadata_from(config),
-            resume_from_checkpoint_id=config.resume_from_checkpoint_id,
-            load_optimizer=config.load_optimizer,
-            lora_config=lora_config_from(config),
-            lora_enabled=config.use_lora,
-            num_generator_replicas=0,
-        ) as session,
-        track_run(config, kind="sft", session_id=session.session_id, total_steps=total_steps) as run,
+        training_session_from(config, num_generator_replicas=0) as session,
+        track_run(config, run_dir=run_dir, kind="sft", session=session, total_steps=total_steps) as run,
     ):
         overall_start = time.monotonic()
         trained_steps = 0
@@ -307,6 +299,5 @@ def train(config: SFTConfig, *, to_messages: RowToMessages = messages_column) ->
                 f"Trained 0 of {total_steps} batches — nothing was renderable. Check dataset_split, "
                 "train_on_what, and whether the codec has a stop token for this data's turn order."
             )
-        training_ckpt_id = latest_checkpoint_ref(run, kind="training")
     print(f"Training completed in {time.monotonic() - overall_start:.1f}s")
-    return training_ckpt_id
+    return run_dir

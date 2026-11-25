@@ -40,7 +40,7 @@ uv run python recipes/grpo/gsm8k.py
 uv run python scripts/supported_models.py
 
 # Provision a shared model resource and leave it running for others to attach to
-uv run python scripts/multi_lora/launch.py
+uv run python scripts/multi_lora/launch.py --model Qwen/Qwen3.6-35B-A3B --replicas 1
 
 # Multi-LoRA hyperparameter sweep (provisions one shared resource, deletes it when done)
 uv run python recipes/grpo/deepmath_sweep.py

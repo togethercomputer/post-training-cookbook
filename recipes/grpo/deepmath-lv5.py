@@ -1,5 +1,7 @@
 """GRPO on DeepMath level-5 with Qwen3.8-27B (thinking on)."""
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
 
@@ -24,4 +26,5 @@ config = GRPOConfig(
 )
 
 if __name__ == "__main__":
+    load_dotenv()
     train_single_turn(config)

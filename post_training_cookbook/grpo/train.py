@@ -11,11 +11,10 @@ from __future__ import annotations
 import functools
 import os
 from dataclasses import asdict, replace
-
-from dotenv import load_dotenv
+from pathlib import Path
 
 from post_training_cookbook.codecs import get_codec
-from post_training_cookbook.config import lora_config_from, optimizer_config_from, session_metadata_from
+from post_training_cookbook.config import optimizer_config_from
 from post_training_cookbook.datasets.registry import (
     DATASETS,
     filter_by_prompt_length,
@@ -32,14 +31,16 @@ from post_training_cookbook.grpo.multi_turn import (
 )
 from post_training_cookbook.grpo.resume import load_resume_point, start_progress
 from post_training_cookbook.grpo.single_turn import make_single_turn_collector, run_validation
-from post_training_cookbook.multi_lora import resolve_base_model, training_session
-from post_training_cookbook.run_artifacts import track_run
-
-load_dotenv(override=True)
+from post_training_cookbook.multi_lora import resolve_base_model, training_session_from
+from post_training_cookbook.run_artifacts import claim_run_dir, track_run
 
 
-def train_single_turn(config: GRPOConfig) -> None:
-    """Single-turn GRPO training entry point."""
+def train_single_turn(config: GRPOConfig) -> Path | None:
+    """Single-turn GRPO training entry point.
+
+    Returns the run-artifact directory, or ``None`` when the target step was
+    already reached and no run was started.
+    """
     if config.max_steps_off_policy is not None:
         raise ValueError("max_steps_off_policy is only supported by multi-turn training")
 
@@ -81,7 +82,7 @@ def train_single_turn(config: GRPOConfig) -> None:
     )
     if start_step >= total_steps:
         print(f"Already completed {start_step} steps (target {total_steps}); no training needed")
-        return
+        return None
 
     print(f"Dataset: {config.dataset} ({ds_cfg.hf_name})")
     print(f"Dataset size: {len(train_dataset)} train, {len(val_dataset) if val_dataset else 0} val")
@@ -90,20 +91,14 @@ def train_single_turn(config: GRPOConfig) -> None:
         f" ({config.num_epochs} epochs, {config.batch_size} prompts x {config.group_size} samples per step)"
     )
 
+    run_dir = claim_run_dir(config, kind="grpo-single-turn")
     with (
-        training_session(
-            model=config.model,
-            model_resources_id=config.model_resources_id,
-            display_name=config.wandb_run_name,
-            metadata=session_metadata_from(config),
-            resume_from_checkpoint_id=config.resume_from_checkpoint_id,
-            load_optimizer=config.load_optimizer,
-            lora_config=lora_config_from(config),
-            lora_enabled=config.use_lora,
-            optimizer_config=optimizer_config_from(config),
+        training_session_from(
+            config,
             num_generator_replicas=config.num_generator_replicas,
+            optimizer_config=optimizer_config_from(config),
         ) as session,
-        track_run(config, kind="grpo-single-turn", session_id=session.session_id, total_steps=total_steps) as run,
+        track_run(config, run_dir=run_dir, kind="grpo-single-turn", session=session, total_steps=total_steps) as run,
     ):
         run = replace(run, snapshot_data_state=data_progress.snapshot)
         collect_samples = make_single_turn_collector(
@@ -123,6 +118,7 @@ def train_single_turn(config: GRPOConfig) -> None:
             )
 
         training_loop(total_steps, collect_samples, session, config, run, validate, start_step=start_step)
+    return run_dir
 
 
 def train_multi_turn(
@@ -130,8 +126,13 @@ def train_multi_turn(
     tasks: list[Task],
     env_factory: EnvFactory,
     val_tasks: list[Task] | None = None,
-) -> None:
-    """Multi-turn GRPO training entry point."""
+) -> Path | None:
+    """Multi-turn GRPO training entry point.
+
+    Returns the run-artifact directory, or ``None`` when the target step was
+    already reached and no run was started. A continued run writes to a new
+    directory; ``resume_run_dir`` is only read.
+    """
     if config.max_turns is None:
         raise ValueError("max_turns must be set for multi-turn training")
 
@@ -155,24 +156,18 @@ def train_multi_turn(
     )
     if start_step >= total_steps:
         print(f"Already completed {start_step} steps (target {total_steps}); no training needed")
-        return
+        return None
 
     print(f"Multi-turn training: {len(tasks)} tasks, {total_steps} steps, max_turns={config.max_turns}")
 
+    run_dir = claim_run_dir(config, kind="grpo-multi-turn")
     with (
-        training_session(
-            model=config.model,
-            model_resources_id=config.model_resources_id,
-            display_name=config.wandb_run_name,
-            metadata=session_metadata_from(config),
-            resume_from_checkpoint_id=config.resume_from_checkpoint_id,
-            load_optimizer=config.load_optimizer,
-            lora_config=lora_config_from(config),
-            lora_enabled=config.use_lora,
-            optimizer_config=optimizer_config_from(config),
+        training_session_from(
+            config,
             num_generator_replicas=config.num_generator_replicas,
+            optimizer_config=optimizer_config_from(config),
         ) as session,
-        track_run(config, kind="grpo-multi-turn", session_id=session.session_id, total_steps=total_steps) as run,
+        track_run(config, run_dir=run_dir, kind="grpo-multi-turn", session=session, total_steps=total_steps) as run,
     ):
         run = replace(run, snapshot_data_state=data_progress.snapshot)
         validation_fn = (
@@ -210,3 +205,4 @@ def train_multi_turn(
                     start_step=start_step,
                 )
             )
+    return run_dir

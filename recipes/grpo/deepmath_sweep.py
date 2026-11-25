@@ -15,6 +15,7 @@ learning rate around the recipe's default to compare validation performance.
 
 from concurrent.futures import ThreadPoolExecutor
 
+from dotenv import load_dotenv
 from together.post_training import ModelResourcesClient
 
 from post_training_cookbook.grpo.config import GRPOConfig
@@ -47,6 +48,7 @@ def build_config(model_resources_id: str, lr: float) -> GRPOConfig:
 LEARNING_RATES = (5e-5, 1e-4, 2e-4, 4e-4)
 
 if __name__ == "__main__":
+    load_dotenv()
     # Provision the base-model GPUs once; every arm attaches its own adapter session.
     with ModelResourcesClient.create(base_model=MODEL, lora_enabled=True) as resource:
         configs = [build_config(resource.model_resources_id, lr) for lr in LEARNING_RATES]

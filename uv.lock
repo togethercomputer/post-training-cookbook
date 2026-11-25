@@ -2558,7 +2558,7 @@ requires-dist = [
     { name = "pyyaml", specifier = "~=6.0" },
     { name = "sacrebleu", specifier = "~=2.6" },
     { name = "tiktoken", specifier = "~=0.14" },
-    { name = "together", specifier = ">=3.0.0,<4" },
+    { name = "together", specifier = ">=3.3.0,<4" },
     { name = "torch", specifier = "~=2.13" },
     { name = "transformers", specifier = ">=5.10.0,<6" },
     { name = "wandb", specifier = "~=0.25" },
@@ -2573,7 +2573,7 @@ dev = [
 ]
 notebooks = [{ name = "ipykernel", specifier = "~=6.30" }]
 tinker = [
-    { name = "tinker-cookbook", extras = ["math-rl"] },
+    { name = "tinker-cookbook", extras = ["math-rl"], specifier = ">=0.6.1" },
     { name = "together", extras = ["tinker"] },
 ]
 
@@ -3087,6 +3087,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/a6/20a910d2f096908cf25ec47fa84b35b1bbb1af63dc9713f53f38ed97802e/pyqwest-0.10.0-pp311-pypy311_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:850b8de6ade09a60bdb2f969871a177c2c304b594b2034ba3f5962c7bea75551", size = 5809262, upload-time = "2026-08-21T06:09:15.897Z" },
     { url = "https://files.pythonhosted.org/packages/e4/f7/f92fe4004d93f08c5118e750feefdbc72a73438b7fd7083300728e999911/pyqwest-0.10.0-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:399802647ea646c6ac9b5460e541b7c209b7a13563c667b2690ded2060185f2e", size = 5985550, upload-time = "2026-08-21T06:09:17.579Z" },
     { url = "https://files.pythonhosted.org/packages/47/3e/2c896e54dbe3f1ba6e3bd10e9d412f422a2e33827ff591d59f67b13e0fa5/pyqwest-0.10.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:c26f3de1feb5d066d7a66802a47407a93ba043696064ad80beda4a0a4bf10056", size = 4873529, upload-time = "2026-08-21T06:09:19.161Z" },
+]
+
+[[package]]
+name = "pyrage"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/a4/612910dbedf7d9fb24ec58474849438b6f88e078e1a100f73a54a605d228/pyrage-1.4.0.tar.gz", hash = "sha256:545bf188e8d217ec88c32bc8e8bf56026c8c0b1b1f96d2688cedf1427ab0e827", size = 32198, upload-time = "2026-08-23T22:48:59.906Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/bb/6b167a449e95ecf0eaf4277c949a89a29dfc08cc533f710a9e6f12bef513/pyrage-1.4.0-cp310-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:bcf4177aea91a9f48951db8001c1385baafbae62cc15d691ef43efebaab6b8db", size = 1701313, upload-time = "2026-08-23T22:48:53.835Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/cb/d88aaab0b89141802473f6139fe8e05519d1b6ac06bff8231a1378a5674f/pyrage-1.4.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f868b360ccd3f836326d42b532fae3e8eb8340a88cca0a39c0ae10fce68f6cc5", size = 882978, upload-time = "2026-08-23T22:48:55.525Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/f0/41da7d88cfdad2eba492f3275ec50a65916ccd3a78140fb15875569ad1ff/pyrage-1.4.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7f4eb0cbc2b4aee5deac9862c47b3895866df5554153951af822e9c581e68558", size = 924673, upload-time = "2026-08-23T22:48:57.1Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/8c/354fdb9ee7b45a2060272c623536b2cf9f0996de2242eaac177cff3f8003/pyrage-1.4.0-cp310-abi3-win_amd64.whl", hash = "sha256:c4a5dcd24a14b5e0d4cccff13649a2b8f1609ad45d6438bb85f35d84b0c8155e", size = 848219, upload-time = "2026-08-23T22:48:58.702Z" },
 ]
 
 [[package]]
@@ -3641,7 +3653,7 @@ wheels = [
 
 [[package]]
 name = "tinker"
-version = "0.23.1"
+version = "0.39.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -3659,14 +3671,14 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/d8/e0010831d81292ab1e6eb4bf15127fa890b24a7934994759c4cdd97a1a64/tinker-0.23.1.tar.gz", hash = "sha256:34395c99d1a90cb1f95d7c89c5597b3fbdc2ac8e9b0aeafbb72c169865310a90", size = 247623, upload-time = "2026-07-18T05:24:54.784Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/a5/61141855969a41fd8ad3c2bfc77224d1a7b4dfc1aabc0229ae69fd6e772e/tinker-0.39.0.tar.gz", hash = "sha256:bc882bdacf676177725d920d7f39d57ff8bb6f02ab4cff18054f4b9d877c6bc0", size = 338857, upload-time = "2026-11-07T02:15:08.667Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/b5/02e3d0e5470672e581f986dfabdbf3c1e4bbb25c9e9a850e3666354d2a78/tinker-0.23.1-py3-none-any.whl", hash = "sha256:158363f4270a47f210b7018f1ccd6d53049ca6e7ddb4d922f80d8570a2da8e8f", size = 237185, upload-time = "2026-07-18T05:24:55.878Z" },
+    { url = "https://files.pythonhosted.org/packages/51/97/efbf0734ce67297b64e6f17469e9a2179773a1d7b794047cba98d38c4674/tinker-0.39.0-py3-none-any.whl", hash = "sha256:47c87de4e13ca6eeaecfff55b316bd436344d98685091c3024c44462e946250d", size = 331100, upload-time = "2026-11-07T02:15:06.908Z" },
 ]
 
 [[package]]
 name = "tinker-cookbook"
-version = "0.5.7"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -3679,6 +3691,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "pyrage" },
     { name = "rich" },
     { name = "safetensors" },
     { name = "termcolor" },
@@ -3689,9 +3702,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/22/976c12fc8a884a09559dc84a7ebb57cd9d90feba59fae4829c20e9605950/tinker_cookbook-0.5.7.tar.gz", hash = "sha256:e4199b59bcf9f567aace776336ea8015db63fb465156af95c1d39c27c5941238", size = 4877347, upload-time = "2026-09-03T20:43:03.75Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/70/8d14219bc74681c495a0c65c22339dcefc04aaa026c5bed2d00da853f92c/tinker_cookbook-0.7.0.tar.gz", hash = "sha256:b9cfd7098185f3b7f56c0a268c229ed60bb519116d5bc3a7af5232d7a4b4b3c1", size = 5173181, upload-time = "2026-11-17T20:35:36.697Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/be/2571457e60162043b1c119965de4a795fccbcdb3678fe6805950b9f42372/tinker_cookbook-0.5.7-py3-none-any.whl", hash = "sha256:7d2490c5c4c4e1b5cf6a86be4a73e020a80e44cbbb4b071acf314d38fcd25f7f", size = 1145190, upload-time = "2026-09-03T20:43:01.51Z" },
+    { url = "https://files.pythonhosted.org/packages/67/56/809b911367f818afcdca164fb9bd3435cdbbd5b4de0b3639206e4e721560/tinker_cookbook-0.7.0-py3-none-any.whl", hash = "sha256:2d2ea9fde8dfc4fb7197c0a132e78f221fd6332011d81f189aa95d59f62c11f8", size = 1343463, upload-time = "2026-11-17T20:35:34.656Z" },
 ]
 
 [package.optional-dependencies]
@@ -3703,17 +3716,17 @@ math-rl = [
 
 [[package]]
 name = "tml-renderers"
-version = "0.2.0"
+version = "0.4.2"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/6b/184a2359a0ec3b59fee2b632c18530c0916df6b958ba523f163085feb3fe/tml_renderers-0.2.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:983ca5353bc64b23454f65222a995793de71001f209973386ae5fe98f8a7644e", size = 12897845, upload-time = "2026-10-15T00:42:14.71Z" },
-    { url = "https://files.pythonhosted.org/packages/b6/e9/9a4ed992f3634df8c2bc1a32343cb531940cfd4b6a9238f3296bce0dbe26/tml_renderers-0.2.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6e65cb18fcb6ea0583d9583106674d503f94ce8ebcde0969b4dc51345a3e259a", size = 13160904, upload-time = "2026-10-15T00:41:29.876Z" },
-    { url = "https://files.pythonhosted.org/packages/b9/b5/a9419dc7e43c9774361e74ea6fcc989d59a1f4ac2123fe8a28dbc42ed0a3/tml_renderers-0.2.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7d6c9c0908594dda80358e2dfc6d14b4b40b78d6c01ad0a519dc871946cd2851", size = 13368929, upload-time = "2026-10-15T00:41:36.201Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/83/1fe06f740b0dfd35f32f0f1b188b83e87e063c5d9f81ad6969178b8c9fa2/tml_renderers-0.4.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:e33f46717629d2bf8f23284c87a4383667a9e469c7fad35210c5beb0ea8a6318", size = 17293651, upload-time = "2026-11-18T00:15:01.592Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/2c/86d95f04a42acd13f7283b16c1821636a9d3e35f0dbabe8e93f11e7e12fb/tml_renderers-0.4.2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:de67c51a0f25d7c65f37bfa0be9b1bd7eb715fcfad1a35d5ad3be443a2887b10", size = 17495537, upload-time = "2026-11-18T00:15:04.766Z" },
+    { url = "https://files.pythonhosted.org/packages/79/a7/31c912bff7302f69d5e59e9edd911da1ca4109c1ad02eeb7f406540b2120/tml_renderers-0.4.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:da7cff5cca1447e2793066c9dffd127bfe518d3c6c923065be0016c677faa28a", size = 17735158, upload-time = "2026-11-18T00:15:07.53Z" },
 ]
 
 [[package]]
 name = "together"
-version = "3.0.0"
+version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -3728,9 +3741,9 @@ dependencies = [
     { name = "types-pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/7b/4c8dd7481e0c536e689c310bc217687d9b94457fe14946bb84cb1242723d/together-3.0.0.tar.gz", hash = "sha256:622c28b577f8f6e5af2b08d98a660de54f2f256ff425214fa6f7fb5eb1698809", size = 1143040, upload-time = "2026-10-22T18:33:03.431Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/9e/22151b786d3e3e5b9a8abcab7c1718f0f9d61a455774471e66eee852c6a1/together-3.3.0.tar.gz", hash = "sha256:4c29f6e7afb01d75131928376e629f7b16a831c1d2bcce64f555a7550c2f0a7e", size = 1192320, upload-time = "2026-11-19T01:30:31.03Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/20/f796ce992cf7cbcadc3773c44db9ee3e0cd5d3655cd3562abed0b8be66fb/together-3.0.0-py3-none-any.whl", hash = "sha256:13458c58200fb10034bfe7463a95c0a99b9dcedb592e9ebc16e3e708f402066b", size = 929509, upload-time = "2026-10-22T18:33:02.009Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/aa/db39d34ff8e3c2843229e32c3062a88047c7c6de2b37bb65134e7b207c0b/together-3.3.0-py3-none-any.whl", hash = "sha256:eb73b852602d824473c7e7bf79ea119c916e84e20d36f2f6b2e65490e28715c4", size = 954854, upload-time = "2026-11-19T01:30:29.259Z" },
 ]
 
 [package.optional-dependencies]

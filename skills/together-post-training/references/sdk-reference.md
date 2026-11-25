@@ -340,7 +340,7 @@ All parameters are keyword-only.
 |---|---|
 | `WEIGHT_SYNC_TYPE_SYNCHRONOUS` | Publishes the weights before `weights_sync` returns. The next `sample` is guaranteed to use the updated policy. GRPO and other on-policy cookbook loops use this; trainer-only SFT/DPO skip `weights_sync`. |
 | `WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH` | Queues publication and returns without waiting for it to complete. |
-| `WEIGHT_SYNC_TYPE_PIPELINE` | Allows publication while rollouts are in flight. Rejected with `InvalidArgument` on LoRA sessions: a rollout is bound to its adapter at admission and cannot migrate mid-decode. |
+| `WEIGHT_SYNC_TYPE_PIPELINE` | Allows publication while rollouts are in flight. LoRA adapter weights are updated in place so a rollout can continue decoding with the updated adapter. |
 
 **Returns:** `WeightsSyncResult` with `.weights_version`, the policy version made available or queued for sampling.
 

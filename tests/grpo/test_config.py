@@ -147,21 +147,22 @@ class TestAsyncCollection:
             ({"groups_in_flight": -1}, "groups_in_flight"),
             ({"batch_size": 0}, "batch_size"),
             ({"weight_sync_type": "BACKGROUND_PUBLISH"}, "weight_sync_type"),
-            ({"weight_sync_type": "WEIGHT_SYNC_TYPE_PIPELINE", "max_steps_off_policy": 0}, "use_lora=False"),
             ({"weight_sync_type": "WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH"}, "requires async collection"),
+            ({"weight_sync_type": "WEIGHT_SYNC_TYPE_PIPELINE"}, "requires async collection"),
         ],
     )
     def test_rejects_invalid_config(self, kwargs, error):
         with pytest.raises(ValueError, match=error):
             GRPOConfig(**kwargs)
 
+    @pytest.mark.parametrize("use_lora", [True, False], ids=["lora", "full-weight"])
     @pytest.mark.parametrize("mode", ["SYNCHRONOUS", "BACKGROUND_PUBLISH", "PIPELINE"])
-    def test_supported_weight_sync_modes(self, mode):
+    def test_supported_weight_sync_modes(self, mode, use_lora):
         """Deferred publishes are only reachable from the loop that accounts for them."""
         deferred = mode != "SYNCHRONOUS"
         config = GRPOConfig(
             weight_sync_type=f"WEIGHT_SYNC_TYPE_{mode}",
-            use_lora=mode != "PIPELINE",
+            use_lora=use_lora,
             episodes_per_task=2 if deferred else 1,
             max_steps_off_policy=1 if deferred else None,
         )
@@ -173,6 +174,13 @@ class TestAsyncCollection:
         config = GRPOConfig.from_yaml(str(path))
         assert config.max_steps_off_policy == 0
         assert config.groups_in_flight == 3
+
+
+class TestResourceTimeouts:
+    @pytest.mark.parametrize("field", ["ready_timeout_s", "inactive_timeout_s"])
+    def test_rejects_timeouts_when_attaching(self, field):
+        with pytest.raises(ValueError, match="only apply when provisioning"):
+            GRPOConfig(model_resources_id="mr-1", **{field: 30})
 
 
 class TestGeneratorReplicas:

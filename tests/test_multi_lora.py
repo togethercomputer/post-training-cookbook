@@ -9,7 +9,8 @@ import pytest
 from together.post_training import LoraConfig, MuonConfig, OptimizerConfig, SessionMetadata
 
 import post_training_cookbook.multi_lora as multi_lora
-from post_training_cookbook.multi_lora import resolve_base_model, training_session
+from post_training_cookbook.grpo.config import GRPOConfig
+from post_training_cookbook.multi_lora import resolve_base_model, training_session, training_session_from
 
 READY = "MODEL_RESOURCES_STATUS_READY"
 CREATING = "MODEL_RESOURCES_STATUS_CREATING"
@@ -41,6 +42,8 @@ class StubConfig:
 def install(monkeypatch, *, resource_model=None, create_session_error=None, stop_error=None):
     """Patch ``multi_lora.ModelResourcesClient`` with a fake; return (events, state).
 
+    The fake handles exit like the SDK's: a session stops, a resource stops if it
+    was created and detaches if it was attached, and a failed stop raises.
     ``events`` records the ordered lifecycle calls; ``state`` captures the
     ``create``/``attach`` kwargs for assertions.
     """
@@ -51,13 +54,28 @@ def install(monkeypatch, *, resource_model=None, create_session_error=None, stop
     class FakeSession:
         session_id = "sess-1"
 
-        def stop(self):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
             events.append("session.stop")
             if stop_error is not None:
                 raise stop_error
 
+        def retrieve(self):
+            return SimpleNamespace(status="SESSION_STATUS_ACTIVE")
+
     class FakeHandle:
         model_resources_id = resource_model.id
+
+        def __init__(self, *, owned):
+            self.owned = owned
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            events.append("resource.stop" if self.owned else "resource.detach")
 
         def retrieve(self):
             events.append("retrieve")
@@ -84,24 +102,18 @@ def install(monkeypatch, *, resource_model=None, create_session_error=None, stop
                 raise create_session_error
             return FakeSession()
 
-        def stop(self):
-            events.append("resource.stop")
-
-        def detach(self):
-            events.append("resource.detach")
-
     class FakeModelResources:
         @classmethod
         def create(cls, **kwargs):
             state["create_kwargs"] = kwargs
             events.append("create")
-            return FakeHandle()
+            return FakeHandle(owned=True)
 
         @classmethod
         def attach(cls, **kwargs):
             state["attach_kwargs"] = kwargs
             events.append("attach")
-            return FakeHandle()
+            return FakeHandle(owned=False)
 
     monkeypatch.setattr(multi_lora, "ModelResourcesClient", FakeModelResources)
     return events, state
@@ -208,6 +220,49 @@ def test_fresh_forwards_optimizer_config(monkeypatch, optimizer_config):
     assert state["create_kwargs"]["optimizer_config"] == optimizer_config
 
 
+def test_fresh_forwards_resource_timeouts(monkeypatch):
+    _, state = install(monkeypatch)
+
+    with training_session(model=BASE_MODEL, ready_timeout=120.0, inactive_timeout=30):
+        pass
+
+    assert state["create_kwargs"]["ready_timeout"] == 120.0
+    assert state["create_kwargs"]["inactive_timeout"] == 30
+
+
+def test_training_session_from_maps_grpo_config(monkeypatch):
+    _, state = install(monkeypatch)
+    config = GRPOConfig(
+        model=BASE_MODEL,
+        num_generator_replicas=2,
+        ready_timeout_s=90.0,
+        inactive_timeout_s=45,
+        wandb_run_name="arm-a",
+        lora_rank=8,
+    )
+
+    with training_session_from(config, num_generator_replicas=config.num_generator_replicas):
+        pass
+
+    assert state["create_kwargs"]["base_model"] == BASE_MODEL
+    assert state["create_kwargs"]["compute_config"] == {"num_generator_replicas": 2}
+    assert state["create_kwargs"]["ready_timeout"] == 90.0
+    assert state["create_kwargs"]["inactive_timeout"] == 45
+    assert state["session_kwargs"]["display_name"] == "arm-a"
+    assert state["session_kwargs"]["lora_config"] == LoraConfig(rank=8)
+
+
+@pytest.mark.parametrize("timeout", [{"ready_timeout": 60.0}, {"inactive_timeout": 30}])
+def test_attach_rejects_resource_timeouts(monkeypatch, timeout):
+    events, _ = install(monkeypatch)
+
+    with pytest.raises(ValueError, match="only apply when provisioning"):
+        with training_session(model_resources_id="mr-1", **timeout):
+            pass
+
+    assert events == []
+
+
 def test_create_session_failure_stops_owned_resource(monkeypatch):
     events, _ = install(monkeypatch, create_session_error=RuntimeError("boom"))
 
@@ -215,7 +270,7 @@ def test_create_session_failure_stops_owned_resource(monkeypatch):
         with training_session(model=BASE_MODEL):
             pass
 
-    assert events == ["create", ("create_session", None), "retrieve", "resource.stop"]
+    assert events == ["create", ("create_session", None), "resource.stop"]
 
 
 def test_create_session_failure_detaches_borrowed_resource(monkeypatch):
@@ -225,7 +280,7 @@ def test_create_session_failure_detaches_borrowed_resource(monkeypatch):
         with training_session(model_resources_id="mr-1"):
             pass
 
-    assert events == ["attach", "retrieve", ("create_session", None), "retrieve", "resource.detach"]
+    assert events == ["attach", "retrieve", ("create_session", None), "resource.detach"]
 
 
 def test_attach_non_ready_detaches_without_opening_session(monkeypatch):
@@ -235,7 +290,7 @@ def test_attach_non_ready_detaches_without_opening_session(monkeypatch):
         with training_session(model_resources_id="mr-1"):
             pass
 
-    assert events == ["attach", "retrieve", "retrieve", "resource.detach"]
+    assert events == ["attach", "retrieve", "resource.detach"]
 
 
 def test_attach_rejects_non_lora_resource(monkeypatch):
@@ -273,15 +328,26 @@ def test_attach_allows_trainer_only_without_generator(monkeypatch):
     assert ("create_session", LoraConfig(rank=8)) in events
 
 
-def test_teardown_is_best_effort(monkeypatch, caplog):
+def test_teardown_failure_raises(monkeypatch):
     events, _ = install(monkeypatch, stop_error=RuntimeError("stop boom"))
 
-    with caplog.at_level("WARNING"):
+    with pytest.raises(RuntimeError, match="stop boom"):
         with training_session(model_resources_id="mr-1", lora_config=LoraConfig(rank=8)):
             pass
 
     assert events[-2:] == ["session.stop", "resource.detach"]
-    assert "stop boom" in caplog.text
+
+
+def test_teardown_failure_chains_body_failure(monkeypatch, caplog):
+    events, _ = install(monkeypatch, stop_error=RuntimeError("stop boom"))
+
+    with caplog.at_level("WARNING"), pytest.raises(RuntimeError, match="stop boom") as excinfo:
+        with training_session(model=BASE_MODEL):
+            raise ValueError("body boom")
+
+    assert isinstance(excinfo.value.__context__, ValueError)
+    assert events[-3:] == ["retrieve", "session.stop", "resource.stop"]
+    assert "status=" in caplog.text
 
 
 def test_rejects_both_model_and_resource():

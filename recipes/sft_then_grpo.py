@@ -14,9 +14,12 @@ scores. The two W&B runs share a group and a short handoff id in their names.
 from dataclasses import replace
 from uuid import uuid4
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.datasets.registry import DATASETS
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
+from post_training_cookbook.run_artifacts import latest_checkpoint_ref
 from post_training_cookbook.sft.config import SFTConfig
 from post_training_cookbook.sft.train import train as sft_train
 
@@ -72,7 +75,9 @@ grpo_config = GRPOConfig(
 )
 
 if __name__ == "__main__":
-    checkpoint_id = sft_train(sft_config, to_messages=gsm8k_messages)
+    load_dotenv()
+    run_dir = sft_train(sft_config, to_messages=gsm8k_messages)
+    checkpoint_id = latest_checkpoint_ref(run_dir, kind="training")
     if checkpoint_id is None:
         raise SystemExit("SFT did not write a training checkpoint; set training_checkpoint_interval")
     train_single_turn(replace(grpo_config, resume_from_checkpoint_id=checkpoint_id, load_optimizer=False))

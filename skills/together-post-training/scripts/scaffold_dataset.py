@@ -134,6 +134,8 @@ def main() -> None:
     recipe_code = textwrap.dedent(f'''\
         """GRPO on {key} — edit config values below and run."""
 
+        from dotenv import load_dotenv
+
         from post_training_cookbook.grpo.config import GRPOConfig
         from post_training_cookbook.grpo.train import train_single_turn
 
@@ -162,6 +164,7 @@ def main() -> None:
         )
 
         if __name__ == "__main__":
+            load_dotenv()
             train_single_turn(config)
     ''')
     recipe_path = out / f"recipe_{key}.py"

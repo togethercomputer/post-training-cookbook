@@ -14,6 +14,12 @@ from post_training_cookbook.run_artifacts import Run
 from tests.grpo._fakes import FakeCodec, MockSession, OneStepEnv, _base_config
 
 
+@pytest.fixture(autouse=True)
+def _isolated_cwd(monkeypatch, tmp_path):
+    """Default run directories are cwd-relative; keep them out of the checkout."""
+    monkeypatch.chdir(tmp_path)
+
+
 @pytest.mark.parametrize(
     ("weight_sync_type", "use_lora"),
     [
@@ -26,7 +32,7 @@ def test_single_turn_rejects_async_collection_before_setup(monkeypatch, weight_s
     get_codec = Mock()
     training_session = Mock()
     monkeypatch.setattr(train, "get_codec", get_codec)
-    monkeypatch.setattr(train, "training_session", training_session)
+    monkeypatch.setattr(train, "training_session_from", training_session)
     config = _base_config(
         max_turns=None,
         max_steps_off_policy=0,
@@ -48,7 +54,7 @@ def test_multi_turn_dispatch_preserves_zero_budget(monkeypatch, tmp_path, budget
     codec = FakeCodec()
     monkeypatch.setattr(train, "get_codec", lambda *args, **kwargs: codec)
     session_factory = Mock(return_value=nullcontext(session))
-    monkeypatch.setattr(train, "training_session", session_factory)
+    monkeypatch.setattr(train, "training_session_from", session_factory)
     monkeypatch.setattr(train, "track_run", lambda *args, **kwargs: nullcontext(run))
     sync_loop, async_loop = Mock(), AsyncMock()
     monkeypatch.setattr(train, "training_loop", sync_loop)
@@ -74,7 +80,7 @@ def test_multi_turn_dispatch_preserves_zero_budget(monkeypatch, tmp_path, budget
             == async_loop.call_args.kwargs["data_progress"].snapshot()
         )
     assert session.checkpoints == []
-    assert session_factory.call_args.kwargs["num_generator_replicas"] == 2
+    session_factory.assert_called_once_with(config, num_generator_replicas=2, optimizer_config=None)
 
 
 def test_single_turn_forwards_generator_replicas(monkeypatch, tmp_path):
@@ -82,7 +88,7 @@ def test_single_turn_forwards_generator_replicas(monkeypatch, tmp_path):
     run = Run(dir=tmp_path, wandb=None, rollouts_enabled=False)
     session_factory = Mock(return_value=nullcontext(session))
     monkeypatch.setattr(train, "get_codec", lambda *args, **kwargs: FakeCodec())
-    monkeypatch.setattr(train, "training_session", session_factory)
+    monkeypatch.setattr(train, "training_session_from", session_factory)
     monkeypatch.setattr(train, "track_run", lambda *args, **kwargs: nullcontext(run))
     monkeypatch.setattr(train, "load_grpo_dataset", lambda *args: ([{}], None))
     monkeypatch.setattr(train, "filter_by_prompt_length", lambda dataset, *args, **kwargs: dataset)
@@ -90,9 +96,10 @@ def test_single_turn_forwards_generator_replicas(monkeypatch, tmp_path):
     loop = Mock()
     monkeypatch.setattr(train, "training_loop", loop)
 
-    train.train_single_turn(_base_config(max_turns=None, num_steps=1, num_generator_replicas=3))
+    config = _base_config(max_turns=None, num_steps=1, num_generator_replicas=3)
+    train.train_single_turn(config)
 
-    assert session_factory.call_args.kwargs["num_generator_replicas"] == 3
+    session_factory.assert_called_once_with(config, num_generator_replicas=3, optimizer_config=None)
     loop.assert_called_once()
     assert session.checkpoints == []
 
@@ -112,7 +119,7 @@ def _patch_entry_points(monkeypatch, tmp_path):
     run = Run(dir=tmp_path, wandb=None, rollouts_enabled=False)
     monkeypatch.setattr(train, "get_codec", lambda *args, **kwargs: FakeCodec())
     session_factory = Mock(return_value=nullcontext(session))
-    monkeypatch.setattr(train, "training_session", session_factory)
+    monkeypatch.setattr(train, "training_session_from", session_factory)
     monkeypatch.setattr(train, "track_run", lambda *args, **kwargs: nullcontext(run))
     monkeypatch.setattr(train, "load_grpo_dataset", lambda *args: ([{}], None))
     monkeypatch.setattr(train, "filter_by_prompt_length", lambda dataset, *args, **kwargs: dataset)
@@ -133,9 +140,8 @@ def _resume_from_record(tmp_path, mode, record):
         resume_run_dir=str(tmp_path),
     )
     if mode == "single":
-        train.train_single_turn(config)
-    else:
-        train.train_multi_turn(config, [Task(prompt="q", target="a")], OneStepEnv)
+        return train.train_single_turn(config)
+    return train.train_multi_turn(config, [Task(prompt="q", target="a")], OneStepEnv)
 
 
 @pytest.mark.parametrize("mode", ["single", "multi", "async"])
@@ -151,7 +157,7 @@ def test_entry_points_forward_checkpoint_progress(monkeypatch, tmp_path, mode):
     loop = async_loop if mode == "async" else sync_loop
     assert loop.call_args.args[0] == 10
     assert loop.call_args.kwargs["start_step"] == 7
-    assert session_factory.call_args.kwargs["resume_from_checkpoint_id"] == "checkpoint"
+    assert session_factory.call_args.args[0].resume_from_checkpoint_id == "checkpoint"
 
 
 @pytest.mark.parametrize("mode", ["single", "multi", "async"])
@@ -159,10 +165,37 @@ def test_entry_points_forward_checkpoint_progress(monkeypatch, tmp_path, mode):
 def test_completed_target_allocates_no_session(monkeypatch, tmp_path, mode, step):
     record = {"step": step, "data_state": _progress(mode).snapshot()}
     session_factory, sync_loop, async_loop = _patch_entry_points(monkeypatch, tmp_path)
-    _resume_from_record(tmp_path, mode, record)
+    assert _resume_from_record(tmp_path, mode, record) is None
     session_factory.assert_not_called()
     sync_loop.assert_not_called()
     async_loop.assert_not_called()
+    assert not (tmp_path / "runs").exists()
+
+
+@pytest.mark.parametrize("mode", ["single", "multi"])
+def test_entry_points_claim_and_return_run_dir(monkeypatch, tmp_path, mode):
+    session_factory, _, _ = _patch_entry_points(monkeypatch, tmp_path)
+    run_dir = tmp_path / "out"
+    config = _base_config(num_steps=1, max_turns=None if mode == "single" else 4, run_dir=str(run_dir))
+    if mode == "single":
+        assert train.train_single_turn(config) == run_dir
+    else:
+        assert train.train_multi_turn(config, [Task(prompt="q", target="a")], OneStepEnv) == run_dir
+    assert run_dir.is_dir()
+
+
+@pytest.mark.parametrize("mode", ["single", "multi"])
+def test_used_run_dir_fails_before_provisioning(monkeypatch, tmp_path, mode):
+    session_factory, _, _ = _patch_entry_points(monkeypatch, tmp_path)
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "metrics.jsonl").write_text("")
+    config = _base_config(num_steps=1, max_turns=None if mode == "single" else 4, run_dir=str(tmp_path / "out"))
+    with pytest.raises(FileExistsError):
+        if mode == "single":
+            train.train_single_turn(config)
+        else:
+            train.train_multi_turn(config, [Task(prompt="q", target="a")], OneStepEnv)
+    session_factory.assert_not_called()
 
 
 @pytest.mark.parametrize("mode", ["single", "multi", "async"])

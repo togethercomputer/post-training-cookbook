@@ -28,6 +28,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.envs.base import Env, StepResult, Task, ToolResult, tool_to_spec
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_multi_turn
@@ -175,6 +177,7 @@ TASKS = [
 
 
 def main() -> None:
+    load_dotenv()
     config = GRPOConfig(
         model="Qwen/Qwen3.8-27B",
         max_turns=6,  # >0 selects multi-turn mode

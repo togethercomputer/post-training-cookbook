@@ -14,8 +14,12 @@ and free their GPUs when done with ``python scripts/multi_lora/clean_up.py``.
 
 import os
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
+
+load_dotenv()
 
 # A teammate provisioned this and shared the ID (Slack, a ticket, env var).
 RESOURCE_ID = os.environ["MODEL_RESOURCES_ID"]

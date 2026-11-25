@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-from typing import Literal, get_args
+from dataclasses import dataclass, field, fields
+from typing import Any, Literal, get_args
 
 import yaml
 from together.post_training import (
@@ -16,7 +16,12 @@ from together.post_training import (
     WeightSyncType,
 )
 
-from post_training_cookbook.config import validate_lora_config, validate_optimizer, validate_resume
+from post_training_cookbook.config import (
+    validate_lora_config,
+    validate_optimizer,
+    validate_resource_timeouts,
+    validate_resume,
+)
 
 PolicyLoss = Literal["ppo", "grpo", "cispo", "dppo", "dro", "importance_sampling"]
 
@@ -112,6 +117,10 @@ class GRPOConfig:
     model_resources_id: str | None = None
     # Provisioning only; attached resources retain their existing replica count.
     num_generator_replicas: int = 1
+    # Provisioning only; None keeps the SDK / server defaults.
+    ready_timeout_s: float | None = None
+    inactive_timeout_s: int | None = None
+    run_dir: str | None = None
     batch_size: int = 16
     num_steps: int | None = None
     learning_rate: float = 1e-5
@@ -184,6 +193,7 @@ class GRPOConfig:
     wandb_entity: str | None = None
     wandb_run_name: str | None = None
     wandb_group: str | None = None
+    wandb_extra_config: dict[str, Any] = field(default_factory=dict)
     export_samples: bool = True
 
     # LoRA on by default; unset rank/alpha → platform default. False → full weights.
@@ -198,7 +208,7 @@ class GRPOConfig:
     weight_decay: float = 0.01
 
     # Muon requires full-weight training (use_lora=False); unset knobs defer to
-    # the server. See https://docs.together.ai/docs/post-training/sdk-reference#muon-optimizer for what Muon tunes.
+    # the server. See https://docs.together.ai/docs/post-training/cookbook#optimizer for what Muon tunes.
     optimizer: Literal["adam", "muon"] = "adam"
     muon_scaling_strategy: MuonScalingStrategy | None = None
     muon_momentum: float | None = None
@@ -278,10 +288,6 @@ class GRPOConfig:
                 f"{self.weight_sync_type} requires async collection; set max_steps_off_policy "
                 "(or use WEIGHT_SYNC_TYPE_SYNCHRONOUS)"
             )
-        # The server rejects PIPELINE on a LoRA session; fail before provisioning.
-        if self.weight_sync_type == "WEIGHT_SYNC_TYPE_PIPELINE" and self.use_lora:
-            raise ValueError("WEIGHT_SYNC_TYPE_PIPELINE requires use_lora=False")
-
         if self.max_sample_tokens > self.max_model_length:
             raise ValueError(
                 f"max_sample_tokens ({self.max_sample_tokens}) exceeds max_model_length ({self.max_model_length})"
@@ -299,6 +305,7 @@ class GRPOConfig:
         validate_lora_config(self)
         validate_optimizer(self)
         validate_resume(self)
+        validate_resource_timeouts(self)
         if self.continues_run and self.resume_run_dir is None:
             raise ValueError(
                 "Continuing from a training checkpoint requires resume_run_dir (the source run directory); "
