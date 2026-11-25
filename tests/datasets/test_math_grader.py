@@ -57,3 +57,37 @@ class TestBoxedMathReward:
 
     def test_empty_target(self):
         assert boxed_math_reward("\\boxed{5}", "") == 0.0
+
+
+class TestRunawayAnswers:
+    """A huge power must not hang the caller (it once froze a whole multi-session GRPO run)."""
+
+    def test_huge_power_times_out_and_falls_back(self, monkeypatch):
+        import threading
+        import time
+
+        from post_training_cookbook.datasets import math_grader
+
+        monkeypatch.setattr(math_grader, "VERIFY_TIMEOUT_S", 3.0)
+        beats = []
+        stop = threading.Event()
+
+        def heartbeat():
+            while not stop.is_set():
+                beats.append(time.monotonic())
+                time.sleep(0.1)
+
+        thread = threading.Thread(target=heartbeat, daemon=True)
+        thread.start()
+        start = time.monotonic()
+        try:
+            assert boxed_math_reward("\\boxed{10^{10^{7}}}", "5") == 0.0
+        finally:
+            stop.set()
+        assert time.monotonic() - start < 15
+        assert len(beats) > 10  # other threads kept running while the worker computed
+        # The pool recovers: the next answer is graded normally.
+        assert boxed_math_reward("\\boxed{\\frac{1}{2}}", "0.5") == 1.0
+
+    def test_string_fallback_still_applies_when_verify_says_no(self):
+        assert math_equal("October 30", "\\text{October 30}")
