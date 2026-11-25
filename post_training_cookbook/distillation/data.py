@@ -2,8 +2,7 @@
 
 A row is ``{"id": ..., "messages": [...prompt messages..., {"role": "assistant", ...}]}``, the same
 shape ``post_training_cookbook.sft.train.build_conversation_samples`` renders, plus any request
-``meta`` under ``"meta"``. Filters take ``(request, output)`` and return whether to keep the row;
-task-specific ones live with the task (the translation filters are in ``recipes/distillation``).
+``meta`` under ``"meta"``. A task can supply a rejection reason for an otherwise usable output.
 """
 
 from __future__ import annotations
@@ -17,18 +16,15 @@ from typing import Any
 
 from post_training_cookbook.distillation.teacher import TeacherOutput, TeacherRequest
 
-Filter = Callable[[TeacherRequest, TeacherOutput], bool]
-
 
 def sft_rows(
     requests: Sequence[TeacherRequest],
     outputs: dict[str, TeacherOutput],
     *,
-    filters: Iterable[Filter] = (),
+    reject_reason: Callable[[TeacherRequest, TeacherOutput], str | None] | None = None,
     keep_reasoning: bool = True,
 ) -> tuple[list[dict[str, Any]], Counter]:
     """Build one SFT row per usable teacher output; return the rows and a count of why others were dropped."""
-    filters = list(filters)
     rows: list[dict[str, Any]] = []
     dropped: Counter = Counter()
     for request in requests:
@@ -42,14 +38,15 @@ def sft_rows(
         if output.truncated:
             dropped["truncated"] += 1
             continue
-        if not output.content.strip():
+        content = output.content.strip()
+        if not content:
             dropped["empty"] += 1
             continue
-        rejected = next((f for f in filters if not f(request, output)), None)
-        if rejected is not None:
-            dropped[getattr(rejected, "__name__", "filter")] += 1
+        reason = reject_reason(request, output) if reject_reason is not None else None
+        if reason is not None:
+            dropped[reason] += 1
             continue
-        assistant: dict[str, Any] = {"role": "assistant", "content": output.content.strip()}
+        assistant: dict[str, Any] = {"role": "assistant", "content": content}
         if keep_reasoning and output.reasoning_content.strip():
             assistant["reasoning_content"] = output.reasoning_content.strip()
         rows.append({"id": request.key, "messages": [*request.messages, assistant], "meta": dict(request.meta)})

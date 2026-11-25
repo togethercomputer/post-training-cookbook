@@ -15,12 +15,12 @@ def _request(key: str, source: str = "hello") -> TeacherRequest:
     return TeacherRequest(key=key, messages=[{"role": "user", "content": source}], meta={"source": source})
 
 
-def not_thai(request: TeacherRequest, output: TeacherOutput) -> bool:
-    return output.content.strip() != THAI
-
-
-def no_echo(request: TeacherRequest, output: TeacherOutput) -> bool:
-    return output.content.strip() != request.meta["source"]
+def reject_reason(request: TeacherRequest, output: TeacherOutput) -> str | None:
+    if output.content.strip() == request.meta["source"]:
+        return "echo"
+    if output.content.strip() == THAI:
+        return "wrong_script"
+    return None
 
 
 def test_sft_rows_counts_each_drop_reason() -> None:
@@ -34,7 +34,7 @@ def test_sft_rows_counts_each_drop_reason() -> None:
         "echo": TeacherOutput(key="echo", ok=True, content="hello"),
     }
 
-    rows, dropped = sft_rows(requests, outputs, filters=[no_echo, not_thai])
+    rows, dropped = sft_rows(requests, outputs, reject_reason=reject_reason)
 
     assert [r["id"] for r in rows] == ["ok"]
     assert rows[0]["messages"][-1] == {"role": "assistant", "content": LAO}
@@ -45,8 +45,8 @@ def test_sft_rows_counts_each_drop_reason() -> None:
         "failed": 1,
         "truncated": 1,
         "empty": 1,
-        "not_thai": 1,
-        "no_echo": 1,
+        "wrong_script": 1,
+        "echo": 1,
     }
 
 
