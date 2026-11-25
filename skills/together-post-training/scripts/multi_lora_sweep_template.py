@@ -26,6 +26,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
+from dotenv import load_dotenv
 from together.post_training import ModelResourcesClient
 
 from post_training_cookbook.grpo.config import GRPOConfig
@@ -64,6 +65,7 @@ def arm_name(hp: dict) -> str:
 
 
 def main() -> None:
+    load_dotenv()
     # Provision the base-model GPUs once. The context manager stops the
     # resource exactly once on exit — even if an arm raises.
     with ModelResourcesClient.create(base_model=base.model, lora_enabled=True) as resource:

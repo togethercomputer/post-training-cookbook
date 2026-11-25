@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass
-from datetime import UTC, datetime
+import re
+from dataclasses import dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import yaml
 
+from post_training_cookbook import run_artifacts
 from post_training_cookbook.dpo.config import DPOConfig
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.run_artifacts import (
@@ -18,15 +20,18 @@ from post_training_cookbook.run_artifacts import (
     Run,
     checkpoint_if_due,
     checkpoints_due,
+    claim_run_dir,
     config_to_dict,
     export_episodes,
     export_samples,
     latest_checkpoint_ref,
     log_step,
-    run_name,
     start_run,
+    track_run,
 )
 from post_training_cookbook.sft.config import SFTConfig
+
+_SESSION = SimpleNamespace(session_id="sess-1", model_resources_id="mr-1")
 
 
 @dataclass
@@ -40,32 +45,50 @@ class _FakeWandb:
     def log(self, metrics: dict, step: int) -> None:
         self.logged.append((step, metrics))
 
-
-def test_run_name_grpo_uses_group_size():
-    cfg = GRPOConfig(model="org/Big-Model-7B", batch_size=4, group_size=8, learning_rate=1e-5)
-    ts = datetime(2026, 5, 1, 18, 38, 33, tzinfo=UTC)
-    name = run_name(cfg, kind="grpo-single-turn", ts=ts)
-    assert name == "Big-Model-7B_post-training-cookbook_1.00e-05_4x8_20260501T183833Z"
+    def finish(self) -> None:
+        pass
 
 
-def test_run_name_sft_omits_group():
-    cfg = SFTConfig(model="org/Tiny-1B", batch_size=4, learning_rate=1e-4)
-    ts = datetime(2026, 5, 1, 18, 38, 33, tzinfo=UTC)
-    name = run_name(cfg, kind="sft", ts=ts)
-    assert name == "Tiny-1B_sft_1.00e-04_4_20260501T183833Z"
+def _claimed(cfg, tmp_path: Path) -> Path:
+    return claim_run_dir(replace(cfg, run_dir=str(tmp_path / "run")), kind="sft")
+
+
+@pytest.mark.parametrize(("wandb_run_name", "name"), [(None, "Tiny-1B_sft_1.00e-04_4"), ("my-run", "my-run")])
+def test_default_run_dir_is_timestamped_under_runs(tmp_path, monkeypatch, wandb_run_name, name):
+    monkeypatch.chdir(tmp_path)
+    cfg = SFTConfig(model="org/Tiny-1B", batch_size=4, learning_rate=1e-4, wandb_run_name=wandb_run_name)
+    run_dir = claim_run_dir(cfg, kind="sft")
+    assert run_dir.parent == Path("runs")
+    assert re.fullmatch(rf"{re.escape(name)}_\d{{8}}T\d{{6}}Z", run_dir.name)
+
+
+def test_claim_run_dir_creates_a_missing_directory_and_writes_config(tmp_path):
+    cfg = SFTConfig(model="org/M", run_dir=str(tmp_path / "a" / "b"))
+    assert claim_run_dir(cfg, kind="sft") == tmp_path / "a" / "b"
+    assert (tmp_path / "a" / "b" / "config.yaml").is_file()
+
+
+def test_claim_run_dir_accepts_an_empty_directory(tmp_path):
+    assert claim_run_dir(SFTConfig(model="org/M", run_dir=str(tmp_path)), kind="sft") == tmp_path
+
+
+def test_claim_run_dir_rejects_a_used_directory(tmp_path):
+    (tmp_path / "metrics.jsonl").write_text("")
+    with pytest.raises(FileExistsError, match="not empty"):
+        claim_run_dir(SFTConfig(model="org/M", run_dir=str(tmp_path)), kind="sft")
 
 
 def test_config_to_dict_round_trip(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     loaded = SFTConfig(**yaml.safe_load((run.dir / "config.yaml").read_text()))
-    assert loaded == cfg
+    assert loaded == replace(cfg, run_dir=str(run.dir))
 
 
 def test_start_run_writes_manifest(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
     fake = _FakeWandb(logged=[])
-    run = start_run(cfg, kind="sft", wandb_run=fake, root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path), wandb_run=fake)
 
     manifest = json.loads((run.dir / "manifest.json").read_text())
     assert manifest["kind"] == "sft"
@@ -75,10 +98,53 @@ def test_start_run_writes_manifest(tmp_path):
     assert "started_at" in manifest
 
 
+def test_track_run_merges_wandb_extra_config(tmp_path, monkeypatch):
+    """Caller metadata reaches the live wandb config (flattened) and the manifest."""
+    captured: dict = {}
+    fake = _FakeWandb(logged=[])
+
+    def fake_init(**kwargs):
+        captured.update(kwargs)
+        return fake
+
+    monkeypatch.setattr("post_training_cookbook.run_artifacts.wandb.init", fake_init)
+
+    cfg = GRPOConfig(
+        model="org/M",
+        wandb_project="proj",
+        wandb_extra_config={
+            "experiment_cell": {"lr": 1e-5, "batch_size": 8},
+            "model_resources_id": "caller-value",
+        },
+    )
+    with track_run(cfg, run_dir=tmp_path, kind="grpo-single-turn", session=_SESSION, total_steps=10) as run:
+        pass
+
+    assert captured["config"]["total_steps"] == 10
+    assert captured["config"]["experiment_cell"] == {"lr": 1e-5, "batch_size": 8}
+    assert "wandb_extra_config" not in captured["config"]
+    assert captured["dir"] == tmp_path
+    manifest = json.loads((run.dir / "manifest.json").read_text())
+    assert manifest["experiment_cell"] == {"lr": 1e-5, "batch_size": 8}
+    assert manifest["model_resources_id"] == _SESSION.model_resources_id
+
+
+def test_track_run_writes_to_run_dir(tmp_path, monkeypatch):
+    cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10, wandb_run_name="label")
+    monkeypatch.setattr(run_artifacts.wandb, "init", lambda **kwargs: None)
+
+    with track_run(cfg, run_dir=_claimed(cfg, tmp_path), kind="sft", session=_SESSION, total_steps=10) as run:
+        assert run.dir == tmp_path / "run"
+        manifest = json.loads((run.dir / "manifest.json").read_text())
+        assert manifest["run_name"] == "run"
+        assert manifest["session_id"] == "sess-1"
+        assert manifest["model_resources_id"] == "mr-1"
+
+
 def test_log_step_writes_jsonl_and_forwards(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
     fake = _FakeWandb(logged=[])
-    run = start_run(cfg, kind="sft", wandb_run=fake, root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path), wandb_run=fake)
 
     log_step(run, 0, {"loss": 1.5, "lr": 1e-4})
     log_step(run, 1, {"loss": 1.2, "lr": 9e-5})
@@ -95,7 +161,7 @@ def test_log_step_drops_non_jsonable_from_jsonl(tmp_path):
     """wandb.Table-style values forwarded to wandb but skipped in metrics.jsonl."""
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
     fake = _FakeWandb(logged=[])
-    run = start_run(cfg, kind="sft", wandb_run=fake, root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path), wandb_run=fake)
 
     bad = object()
     log_step(run, 0, {"loss": 1.0, "table": bad})
@@ -107,7 +173,7 @@ def test_log_step_drops_non_jsonable_from_jsonl(tmp_path):
 
 def test_log_step_handles_no_wandb(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     log_step(run, 0, {"loss": 1.0})
     assert json.loads((run.dir / "metrics.jsonl").read_text().strip()) == {"step": 0, "loss": 1.0}
 
@@ -119,7 +185,7 @@ def test_config_to_dict_rejects_non_dataclass():
 
 def test_export_samples_filename_format(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
 
     export_samples(run, 7, ["q1"], [["a1"]], [[0.5]])
     files = sorted(p.name for p in run.dir.glob("step_*.json"))
@@ -129,7 +195,7 @@ def test_export_samples_filename_format(tmp_path):
 
 def test_export_episodes_writes_groups(tmp_path):
     cfg = SFTConfig(model="org/M", batch_size=4, learning_rate=1e-4, max_steps=10)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
 
     export_episodes(run, 3, [[{"reward": 1.0}], [{"reward": 0.0}]])
     files = list(run.dir.glob("step_*.json"))
@@ -196,7 +262,7 @@ def _checkpoint_if_due(session, run, cfg, *, step, total_steps):
 def test_checkpoint_if_due_saves_and_records(tmp_path):
     """The effectful wrapper maps due-decisions to save calls and ordered jsonl records."""
     cfg = SFTConfig(training_checkpoint_interval=20, inference_checkpoint_interval=20)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     session = _CountingSession()
 
     for step in range(40):
@@ -209,13 +275,13 @@ def test_checkpoint_if_due_saves_and_records(tmp_path):
         ("training", 40, "train-2"),
         ("inference", 40, "model-2"),
     ]
-    assert latest_checkpoint_ref(run, kind="training") == "train-2"
-    assert latest_checkpoint_ref(run, kind="inference") == "model-2"
+    assert latest_checkpoint_ref(run.dir, kind="training") == "train-2"
+    assert latest_checkpoint_ref(run.dir, kind="inference") == "model-2"
 
 
 def test_latest_checkpoint_ref_missing_file(tmp_path):
-    run = start_run(SFTConfig(), kind="sft", root=tmp_path)
-    assert latest_checkpoint_ref(run, kind="training") is None
+    run = start_run(SFTConfig(), kind="sft", run_dir=_claimed(SFTConfig(), tmp_path))
+    assert latest_checkpoint_ref(run.dir, kind="training") is None
 
 
 @pytest.mark.parametrize(
@@ -253,7 +319,7 @@ class _FailingSession:
 def test_intermediate_checkpoint_failure_is_swallowed(tmp_path):
     """A tolerated failure on an intermediate checkpoint logs and continues, writing no record."""
     cfg = SFTConfig(inference_checkpoint_interval=2)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     session = _FailingSession(RuntimeError("operation failed"))
 
     _checkpoint_if_due(session, run, cfg, step=2, total_steps=10)
@@ -265,7 +331,7 @@ def test_intermediate_checkpoint_failure_is_swallowed(tmp_path):
 def test_final_checkpoint_failure_propagates(tmp_path):
     """The mandatory final inference checkpoint must not be silently swallowed."""
     cfg = SFTConfig()
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     session = _FailingSession(RuntimeError("operation failed"))
 
     with pytest.raises(RuntimeError):
@@ -275,7 +341,7 @@ def test_final_checkpoint_failure_propagates(tmp_path):
 def test_unexpected_checkpoint_error_always_propagates(tmp_path):
     """Errors outside the tolerated set abort even for intermediate checkpoints."""
     cfg = SFTConfig(inference_checkpoint_interval=2)
-    run = start_run(cfg, kind="sft", root=tmp_path)
+    run = start_run(cfg, kind="sft", run_dir=_claimed(cfg, tmp_path))
     session = _FailingSession(ValueError("unexpected bug"))
 
     with pytest.raises(ValueError):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Callable, Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 import datasets
@@ -13,14 +14,18 @@ from dotenv import load_dotenv
 from together.post_training import AdamParams, Sample, SessionClient
 
 from post_training_cookbook.codecs import MessageCodec, get_codec
-from post_training_cookbook.config import lora_config_from, session_metadata_from
 from post_training_cookbook.custom_loss import compute_custom_forward_backward, compute_logprobs
 from post_training_cookbook.dpo.config import DPOConfig
 from post_training_cookbook.dpo.loss import make_dpo_loss, masked_logp_sum
 from post_training_cookbook.dpo.samples import build_preference_pair
 from post_training_cookbook.grpo.loop import get_lr_cosine
-from post_training_cookbook.multi_lora import training_session
-from post_training_cookbook.run_artifacts import checkpoint_if_due, log_step, track_run
+from post_training_cookbook.multi_lora import resolve_base_model, training_session_from
+from post_training_cookbook.run_artifacts import (
+    checkpoint_if_due,
+    claim_run_dir,
+    log_step,
+    track_run,
+)
 from post_training_cookbook.samples import extract_loss_mask
 from post_training_cookbook.types import Message
 
@@ -178,11 +183,14 @@ def _eval_preference_accuracy(
     }
 
 
-def train(config: DPOConfig, *, to_pair: RowToPair = helpsteer3_pair) -> None:
-    """Run DPO on the preference pairs ``to_pair`` extracts from each dataset row."""
+def train(config: DPOConfig, *, to_pair: RowToPair = helpsteer3_pair) -> Path:
+    """Run DPO on the preference pairs ``to_pair`` extracts from each dataset row.
+
+    Returns the run-artifact directory.
+    """
     load_dotenv(override=True)
     codec = get_codec(
-        config.model,
+        resolve_base_model(config),
         hf_token=os.environ.get("HF_TOKEN"),
         enable_thinking=config.enable_thinking,
     )
@@ -208,18 +216,10 @@ def train(config: DPOConfig, *, to_pair: RowToPair = helpsteer3_pair) -> None:
             f"left with no response tokens at max_length={config.max_length}"
         )
 
+    run_dir = claim_run_dir(config, kind="dpo")
     with (
-        training_session(
-            model=config.model,
-            display_name=config.wandb_run_name,
-            metadata=session_metadata_from(config),
-            resume_from_checkpoint_id=config.resume_from_checkpoint_id,
-            load_optimizer=config.load_optimizer,
-            lora_enabled=config.use_lora,
-            lora_config=lora_config_from(config),
-            num_generator_replicas=0,
-        ) as session,
-        track_run(config, kind="dpo", session_id=session.session_id, total_steps=config.max_steps) as run,
+        training_session_from(config, num_generator_replicas=0) as session,
+        track_run(config, run_dir=run_dir, kind="dpo", session=session, total_steps=config.max_steps) as run,
     ):
         overall_start = time.monotonic()
         pair_batch = config.batch_size
@@ -337,3 +337,4 @@ def train(config: DPOConfig, *, to_pair: RowToPair = helpsteer3_pair) -> None:
         # Final eval after the last optim_step.
         maybe_eval(config.max_steps)
     print(f"DPO training completed in {time.monotonic() - overall_start:.1f}s")
+    return run_dir

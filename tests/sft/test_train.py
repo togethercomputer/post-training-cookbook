@@ -13,6 +13,13 @@ from post_training_cookbook.sft import train
 from post_training_cookbook.sft.config import SFTConfig
 from tests._codec_fakes import DummyCodec
 
+
+@pytest.fixture(autouse=True)
+def _isolated_cwd(monkeypatch, tmp_path):
+    """Default run directories are cwd-relative; keep them out of the checkout."""
+    monkeypatch.chdir(tmp_path)
+
+
 CONVERSATION = [{"role": "user", "content": "u"}, {"role": "assistant", "content": "a"}]
 
 
@@ -24,11 +31,10 @@ def _stub_remote(monkeypatch, rows):
     monkeypatch.setattr(train.datasets, "load_dataset", lambda *args, **kwargs: datasets.Dataset.from_list(rows))
     monkeypatch.setattr(train, "load_dotenv", lambda **kwargs: None)
     monkeypatch.setattr(train, "get_codec", lambda *args, **kwargs: DummyCodec())
-    monkeypatch.setattr(train, "training_session", factory)
-    monkeypatch.setattr(train, "track_run", lambda *args, **kwargs: nullcontext(Mock()))
+    monkeypatch.setattr(train, "training_session_from", factory)
+    monkeypatch.setattr(train, "track_run", lambda *args, **kwargs: nullcontext(Mock(dir=None)))
     monkeypatch.setattr(train, "log_step", Mock())
     monkeypatch.setattr(train, "checkpoint_if_due", Mock())
-    monkeypatch.setattr(train, "latest_checkpoint_ref", Mock(return_value=None))
     return session, factory
 
 
@@ -58,6 +64,16 @@ def test_steps_span_every_epoch_unless_capped(monkeypatch, max_steps, expected_s
     assert session.trainer.optim_step.call_count == expected_steps
 
 
+def test_used_run_dir_fails_before_a_session_is_provisioned(monkeypatch, tmp_path) -> None:
+    _, factory = _stub_remote(monkeypatch, [{"messages": CONVERSATION}] * 2)
+    (tmp_path / "run").mkdir()
+    (tmp_path / "run" / "metrics.jsonl").write_text("")
+
+    with pytest.raises(FileExistsError):
+        train.train(SFTConfig(model="org/M", batch_size=2, run_dir=str(tmp_path / "run")))
+    factory.assert_not_called()
+
+
 def test_schema_mismatch_fails_before_a_session_is_provisioned(monkeypatch) -> None:
     _, factory = _stub_remote(monkeypatch, [{"prompt": "p", "completion": "c"}] * 2)
 
@@ -69,3 +85,19 @@ def test_schema_mismatch_fails_before_a_session_is_provisioned(monkeypatch) -> N
 def test_config_rejects_unknown_train_on_what() -> None:
     with pytest.raises(ValueError, match="train_on_what"):
         SFTConfig(model="org/M", train_on_what="last_assistant_messages")
+
+
+@pytest.mark.parametrize("field", ["ready_timeout_s", "inactive_timeout_s"])
+def test_config_rejects_timeouts_when_attaching(field) -> None:
+    with pytest.raises(ValueError, match="only apply when provisioning"):
+        SFTConfig(model_resources_id="mr-1", **{field: 30})
+
+
+def test_train_returns_run_dir(monkeypatch, tmp_path) -> None:
+    session, factory = _stub_remote(monkeypatch, [{"messages": CONVERSATION}] * 2)
+    config = SFTConfig(model="org/M", batch_size=2, num_epochs=1, run_dir=str(tmp_path / "run"))
+
+    assert train.train(config) == tmp_path / "run"
+    assert (tmp_path / "run").is_dir()
+    factory.assert_called_once_with(config, num_generator_replicas=0)
+    assert session.trainer.optim_step.call_count == 1

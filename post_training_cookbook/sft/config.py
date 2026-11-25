@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 
 import yaml
 
-from post_training_cookbook.config import validate_lora_config, validate_resume
+from post_training_cookbook.config import validate_lora_config, validate_resource_timeouts, validate_resume
 
 TRAIN_ON_ALL = "all_assistant_messages"
 TRAIN_ON_LAST = "last_assistant_message"
@@ -19,6 +19,10 @@ class SFTConfig:
     # the base model — leave `model` unset in that case).
     model: str | None = None
     model_resources_id: str | None = None
+    # Provisioning only; None keeps the SDK / server defaults.
+    ready_timeout_s: float | None = None
+    inactive_timeout_s: int | None = None
+    run_dir: str | None = None
     # A Hugging Face Hub repo ID, or a local directory of .jsonl files.
     dataset_name: str = "HuggingFaceH4/no_robots"
     dataset_config: str | None = None
@@ -69,6 +73,7 @@ class SFTConfig:
             raise ValueError(f"train_on_what must be {TRAIN_ON_ALL!r} or {TRAIN_ON_LAST!r}: {self.train_on_what!r}")
         validate_lora_config(self)
         validate_resume(self)
+        validate_resource_timeouts(self)
 
     def run_name_suffix(self) -> str:
         """Hyperparameter slug embedded in the run-artifact directory name."""

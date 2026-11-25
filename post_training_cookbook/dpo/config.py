@@ -6,12 +6,20 @@ from dataclasses import dataclass, fields
 
 import yaml
 
-from post_training_cookbook.config import validate_lora_config, validate_resume
+from post_training_cookbook.config import validate_lora_config, validate_resource_timeouts, validate_resume
 
 
 @dataclass
 class DPOConfig:
-    model: str = "Qwen/Qwen3.8-27B"
+    # Name exactly one model source: `model` provisions a fresh resource, or
+    # `model_resources_id` attaches to an existing shared one (which then defines
+    # the base model — leave `model` unset in that case).
+    model: str | None = None
+    model_resources_id: str | None = None
+    # Provisioning only; None keeps the SDK / server defaults.
+    ready_timeout_s: float | None = None
+    inactive_timeout_s: int | None = None
+    run_dir: str | None = None
     dataset_name: str = "nvidia/HelpSteer3"
     dataset_config: str | None = None
     dataset_split: str = "train"
@@ -61,6 +69,7 @@ class DPOConfig:
             raise ValueError("checkpoint intervals must be >= 0 (0 disables)")
         validate_lora_config(self)
         validate_resume(self)
+        validate_resource_timeouts(self)
 
     def run_name_suffix(self) -> str:
         """Hyperparameter slug embedded in the run-artifact directory name."""

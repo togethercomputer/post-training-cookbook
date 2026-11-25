@@ -6,13 +6,18 @@ whether bulky rollout dumps are written. Callers pass the same ``Run`` to
 silently skipped when ``rollouts_enabled=False``, so collectors don't need
 to branch on a config toggle.
 
-Layout written to ``runs/<run_name>/``:
+One run per directory: ``claim_run_dir`` refuses a directory with any entries
+and runs before provisioning, so a used ``run_dir`` fails before GPUs are
+allocated and ``latest_checkpoint_ref`` never returns another run's checkpoint.
+
+Layout written to the run directory:
 
     config.yaml      — round-trippable via ``Config.from_yaml``
-    manifest.json    — wandb url, session id, model, start time, git sha
+    manifest.json    — wandb url, session and model-resource ids, model, start time, git sha
     metrics.jsonl    — one line per step (mirrors ``wandb_run.log``)
     step_NNNN_*.json — per-step rollouts (when ``rollouts_enabled=True``)
     val_NNNN_*.json  — validation rollouts (when ``rollouts_enabled=True``)
+    wandb/           — wandb's local run files (when wandb is enabled)
 """
 
 from __future__ import annotations
@@ -50,13 +55,30 @@ class Run:
     snapshot_data_state: Callable[[], dict[str, Any]] | None = None
 
 
-def run_name(config: Any, *, kind: str, ts: datetime) -> str:
-    """Compose a unique run-name from config + UTC timestamp."""
-    model_id = config.model or getattr(config, "model_resources_id", None) or "model"
-    model_short = model_id.split("/")[-1]
-    stamp = ts.strftime("%Y%m%dT%H%M%SZ")
-    project = getattr(config, "wandb_project", None) or kind
-    return f"{model_short}_{project}_{config.run_name_suffix()}_{stamp}"
+def claim_run_dir(config: Any, *, kind: str) -> Path:
+    """Create the run directory and claim it by writing ``config.yaml``.
+
+    The directory is ``config.run_dir``, or ``runs/<name>_<UTC timestamp>`` when unset,
+    where ``<name>`` is ``wandb_run_name`` or one derived from the model, project and
+    hyperparameters. Raises ``FileExistsError`` if the directory has any entries.
+    """
+    run_dir = Path(config.run_dir) if config.run_dir else _default_run_dir(config, kind=kind)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if any(run_dir.iterdir()):
+        raise FileExistsError(f"run directory {run_dir} is not empty; choose a new run_dir")
+    # Exclusive create: of two launches racing for one directory, only one claims it.
+    with (run_dir / "config.yaml").open("x", encoding="utf-8") as f:
+        yaml.safe_dump(config_to_dict(config), f, sort_keys=False)
+    return run_dir
+
+
+def _default_run_dir(config: Any, *, kind: str) -> Path:
+    name = getattr(config, "wandb_run_name", None)
+    if not name:
+        model_id = config.model or getattr(config, "model_resources_id", None) or "model"
+        project = getattr(config, "wandb_project", None) or kind
+        name = f"{model_id.split('/')[-1]}_{project}_{config.run_name_suffix()}"
+    return Path("runs") / f"{name}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
 
 
 def config_to_dict(config: Any) -> dict[str, Any]:
@@ -69,23 +91,27 @@ def start_run(
     config: Any,
     *,
     kind: str,
+    run_dir: Path,
     wandb_run: Any | None = None,
     session_id: str | None = None,
-    root: Path | str = "runs",
+    model_resources_id: str | None = None,
 ) -> Run:
-    """Create ``runs/<name>/``, write config.yaml and manifest.json, return Run.
+    """Write manifest.json into a ``run_dir`` from :func:`claim_run_dir` and return its Run.
 
     ``Run.rollouts_enabled`` is read from ``config.export_samples`` (defaulting
     to True if absent), so collectors can hand the same ``Run`` to the export
     functions without branching.
     """
     ts = datetime.now(UTC)
-    name = getattr(config, "wandb_run_name", None) or run_name(config, kind=kind, ts=ts)
-    run_dir = Path(root) / name
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    (run_dir / "config.yaml").write_text(yaml.safe_dump(config_to_dict(config), sort_keys=False))
-    manifest = _manifest(config, kind=kind, ts=ts, wandb_run=wandb_run, name=name, session_id=session_id)
+    manifest = _manifest(
+        config,
+        kind=kind,
+        ts=ts,
+        wandb_run=wandb_run,
+        name=run_dir.name,
+        session_id=session_id,
+        model_resources_id=model_resources_id,
+    )
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
     print(f"Run artifacts: {run_dir}")
@@ -93,26 +119,39 @@ def start_run(
 
 
 @contextmanager
-def track_run(config: Any, *, kind: str, session_id: str, total_steps: int) -> Iterator[Run]:
+def track_run(config: Any, *, run_dir: Path, kind: str, session: SessionClient, total_steps: int) -> Iterator[Run]:
     """Scope a wandb run (when ``config.wandb_project`` is set) and a run-artifact ``Run``.
 
-    Starts the wandb run, yields the ``Run`` to log against, and finishes the
-    wandb run on exit. ``total_steps`` is the computed step cap recorded in the
-    wandb config alongside the rest of the config. The finish is best-effort so a
-    teardown failure can't mask an exception from the ``with`` body.
+    Starts the wandb run, yields the ``Run`` writing to the claimed ``run_dir``
+    (see :func:`start_run`) with the session's ID and its model resource's ID in the
+    manifest, and finishes the wandb run on exit. ``total_steps`` is the
+    computed step cap recorded in the wandb config alongside the rest of the
+    config. The finish is best-effort so a teardown failure can't mask an
+    exception from the ``with`` body.
     """
     wandb_run = None
     if config.wandb_project:
+        data = config_to_dict(config)
+        extra = data.pop("wandb_extra_config", None) or {}
         wandb_run = wandb.init(
             project=config.wandb_project,
             entity=config.wandb_entity,
             name=config.wandb_run_name,
             group=config.wandb_group,
-            config={"total_steps": total_steps, **config_to_dict(config)},
+            config={"total_steps": total_steps, **data, **extra},
+            # Keep wandb's local files with the run instead of under the CWD.
+            dir=run_dir,
             reinit="create_new",
         )
     try:
-        yield start_run(config, kind=kind, wandb_run=wandb_run, session_id=session_id)
+        yield start_run(
+            config,
+            kind=kind,
+            run_dir=run_dir,
+            wandb_run=wandb_run,
+            session_id=session.session_id,
+            model_resources_id=session.model_resources_id,
+        )
     finally:
         if wandb_run is not None:
             try:
@@ -188,9 +227,9 @@ async def _save_checkpoint_async(session: SessionClient, run: Run, step: int, *,
     _record_checkpoint(run, step, kind=kind, ref=checkpoint.id, data_state=data_state)
 
 
-def latest_checkpoint_ref(run: Run, *, kind: str) -> str | None:
-    """The last recorded checkpoint ``ref`` of ``kind`` in this run, if any."""
-    refs = [record["ref"] for record in _checkpoint_records(run.dir) if record["kind"] == kind]
+def latest_checkpoint_ref(run_dir: Path, *, kind: str) -> str | None:
+    """The last recorded checkpoint ``ref`` of ``kind`` in the run at ``run_dir``, if any."""
+    refs = [record["ref"] for record in _checkpoint_records(run_dir) if record["kind"] == kind]
     return refs[-1] if refs else None
 
 
@@ -284,8 +323,10 @@ def _manifest(
     wandb_run: Any | None,
     name: str,
     session_id: str | None,
+    model_resources_id: str | None,
 ) -> dict[str, Any]:
     info: dict[str, Any] = {
+        **(getattr(config, "wandb_extra_config", None) or {}),
         "kind": kind,
         "run_name": name,
         "started_at": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -294,6 +335,8 @@ def _manifest(
     }
     if session_id is not None:
         info["session_id"] = session_id
+    if model_resources_id is not None:
+        info["model_resources_id"] = model_resources_id
     if wandb_run is not None:
         info["wandb"] = {
             "url": getattr(wandb_run, "url", None),

@@ -28,7 +28,9 @@ import httpx
 from together import Together
 from together.post_training import ComputeConfig, ModelResourcesClient, SessionMetadata
 
-__all__ = ["resolve_base_model", "training_session"]
+from post_training_cookbook.config import lora_config_from, session_metadata_from
+
+__all__ = ["resolve_base_model", "training_session", "training_session_from"]
 
 _READY = "MODEL_RESOURCES_STATUS_READY"
 _CLIENT_TIMEOUT = httpx.Timeout(timeout=300.0, connect=300.0)
@@ -54,6 +56,32 @@ def resolve_base_model(config) -> str:
 
 
 @contextmanager
+def training_session_from(config, *, num_generator_replicas: int, optimizer_config=None):
+    """Open a training session from a cookbook config (GRPO, SFT or DPO).
+
+    Maps the fields every training config shares onto :func:`training_session`.
+    What differs by trainer is passed explicitly: trainer-only loops (SFT, DPO)
+    never sample, so they pass ``num_generator_replicas=0``; GRPO passes its
+    configured count and its resource-level ``optimizer_config``.
+    """
+    with training_session(
+        model=config.model,
+        model_resources_id=config.model_resources_id,
+        display_name=config.wandb_run_name,
+        metadata=session_metadata_from(config),
+        resume_from_checkpoint_id=config.resume_from_checkpoint_id,
+        load_optimizer=config.load_optimizer,
+        lora_config=lora_config_from(config),
+        lora_enabled=config.use_lora,
+        optimizer_config=optimizer_config,
+        num_generator_replicas=num_generator_replicas,
+        ready_timeout=config.ready_timeout_s,
+        inactive_timeout=config.inactive_timeout_s,
+    ) as session:
+        yield session
+
+
+@contextmanager
 def training_session(
     *,
     model: str | None = None,
@@ -66,6 +94,8 @@ def training_session(
     lora_enabled: bool = True,
     optimizer_config=None,
     num_generator_replicas: int = 1,
+    ready_timeout: float | None = None,
+    inactive_timeout: int | None = None,
 ):
     """Provision-or-attach a model resource and yield a ready session.
 
@@ -87,17 +117,26 @@ def training_session(
     resource rather than changing it. ``lora_config`` only configures a LoRA session
     and must be omitted for full-weight training.
 
+    ``ready_timeout`` and ``inactive_timeout`` likewise apply only when
+    provisioning: the former caps how long ``create`` waits for READY, the latter
+    shortens the server's idle auto-stop. An attached resource's lifetime belongs
+    to whoever provisioned it, so setting either when attaching raises.
+
     ``resume_from_checkpoint_id`` loads a training checkpoint onto the new session.
     ``load_optimizer=False`` loads weights only (fresh optimizer, step 0); omit or
     ``True`` restores optimizer state and the step counter.
 
-    Teardown is best-effort: a cleanup failure is logged, not raised, so it can
-    never mask an exception from the ``with`` body. ``api_key``/``base_url`` are
-    read from the environment.
+    Teardown is the SDK handles' own exit: the session is stopped, then the
+    resource is stopped if this run created it or detached if it was attached. A
+    cleanup failure raises; if the ``with`` body also failed, the body's exception
+    is chained as the cleanup failure's ``__context__`` so both reach the
+    traceback. ``api_key``/``base_url`` are read from the environment.
     """
     _require_single_model_source(model, model_resources_id)
     if not lora_enabled and lora_config is not None:
         raise ValueError("lora_config must be omitted when lora_enabled=False")
+    if model_resources_id is not None and (ready_timeout is not None or inactive_timeout is not None):
+        raise ValueError("ready_timeout and inactive_timeout only apply when provisioning, not when attaching")
     api_key = os.environ.get("TOGETHER_API_KEY")
     base_url = os.environ.get("TOGETHER_BASE_URL")
     attached = model_resources_id is not None
@@ -114,42 +153,32 @@ def training_session(
             lora_enabled=lora_enabled,
             optimizer_config=optimizer_config,
             compute_config=ComputeConfig(num_generator_replicas=num_generator_replicas),
+            ready_timeout=ready_timeout,
+            inactive_timeout=inactive_timeout,
             api_key=api_key,
             base_url=base_url,
         )
 
-    session = None
-    try:
+    with resource:
         if attached:
             _check_attachable(
                 resource.retrieve(),
                 want_lora=lora_enabled,
                 num_generator_replicas=num_generator_replicas,
             )
-        session = resource.create_session(
+        with resource.create_session(
             display_name=display_name,
             metadata=metadata,
             resume_from_checkpoint_id=resume_from_checkpoint_id,
             load_optimizer=load_optimizer,
             lora_config=lora_config,
-        )
-        print(f"Session ready: {session.session_id}")
-        yield session
-    except Exception:
-        _log_statuses(session, resource)
-        raise
-    finally:
-        if session is not None:
+        ) as session:
+            print(f"Session ready: {session.session_id}")
             try:
-                session.stop()
-            except Exception as exc:
-                logger.warning("stopping session %s failed (%s: %s)", session.session_id, type(exc).__name__, exc)
-        try:
-            resource.detach() if attached else resource.stop()
-        except Exception as exc:
-            logger.warning(
-                "releasing resource %s failed (%s: %s)", resource.model_resources_id, type(exc).__name__, exc
-            )
+                yield session
+            except Exception:
+                _log_statuses(session, resource)
+                raise
 
 
 def _log_statuses(session, resource) -> None:
@@ -160,8 +189,7 @@ def _log_statuses(session, resource) -> None:
     nothing about why — only the statuses do.
     """
     try:
-        if session is not None:
-            logger.warning("session %s status=%s", session.session_id, session.retrieve().status)
+        logger.warning("session %s status=%s", session.session_id, session.retrieve().status)
         logger.warning("resource %s status=%s", resource.model_resources_id, resource.retrieve().status)
     except Exception as exc:
         logger.warning("reading session/resource status failed (%s: %s)", type(exc).__name__, exc)

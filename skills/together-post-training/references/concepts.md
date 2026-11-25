@@ -37,7 +37,7 @@ Both SFT and GRPO share the same update loop:
 
 1. **`forward_backward(samples, loss)`**. Feed training samples to the model, compute the loss, and accumulate gradients.
 2. **`session.trainer.optim_step(adam_params)`**. Apply gradients to update the trainer's model weights. The learning rate lives inside `adam_params` (`adam_params.learning_rate`), not as a top-level argument.
-3. **`session.trainer.weights_sync(weight_sync_type)`** (sampling loops only). Publish the updated weights for sampling. GRPO and other on-policy loops pass `"WEIGHT_SYNC_TYPE_SYNCHRONOUS"` so the next sample uses the updated policy. Trainer-only SFT/DPO (`num_generator_replicas=0`) skip this — there is no generator, and the next train step uses the trainer weights directly. See [SDK reference: weights_sync](./sdk-reference.md#sessiontrainerweights_sync) for the other modes (`BACKGROUND_PUBLISH`, `PIPELINE`) and why `PIPELINE` is rejected on LoRA sessions.
+3. **`session.trainer.weights_sync(weight_sync_type)`** (sampling loops only). Publish the updated weights for sampling. GRPO and other on-policy loops pass `"WEIGHT_SYNC_TYPE_SYNCHRONOUS"` so the next sample uses the updated policy. Trainer-only SFT/DPO (`num_generator_replicas=0`) skip this — there is no generator, and the next train step uses the trainer weights directly. Async GRPO also supports `BACKGROUND_PUBLISH` and `PIPELINE` with LoRA and full-weight sessions. See [SDK reference: weights_sync](./sdk-reference.md#sessiontrainerweights_sync).
 4. Repeat.
 
 The difference between SFT and GRPO is what goes into `samples` and which `loss` you use.
