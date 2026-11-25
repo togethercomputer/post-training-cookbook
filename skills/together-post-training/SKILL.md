@@ -110,6 +110,8 @@ uv run python recipes/grpo/gsm8k.py
 Or create a new one:
 
 ```python
+from dotenv import load_dotenv
+
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
 
@@ -123,10 +125,11 @@ config = GRPOConfig(
 )
 
 if __name__ == "__main__":
+    load_dotenv()
     train_single_turn(config)
 ```
 
-The GRPO entry points live in `post_training_cookbook.grpo.train`: `train_single_turn(config)` for prompt→response→reward, and `train_multi_turn(config, tasks, env_factory, val_tasks=None)` for multi-turn/tool-use (see [Multi-turn training](#multi-turn-tool-use-training) below). For the full GRPOConfig parameter reference, read `references/cookbook-guide.md`.
+The GRPO entry points live in `post_training_cookbook.grpo.train`: `train_single_turn(config)` for prompt→response→reward, and `train_multi_turn(config, tasks, env_factory, val_tasks=None)` for multi-turn/tool-use (see [Multi-turn training](#multi-turn-tool-use-training) below). Set environment variables in the shell or call `load_dotenv()` before starting training. For the full GRPOConfig parameter reference, read `references/cookbook-guide.md`.
 
 ### SFT (supervised fine-tuning)
 
@@ -180,6 +183,8 @@ if __name__ == "__main__":
 For agentic / tool-use tasks, the model runs whole episodes against an environment instead of producing a single response. Set `GRPOConfig.max_turns` and call `train_multi_turn`:
 
 ```python
+from dotenv import load_dotenv
+
 from post_training_cookbook.envs.tool_use_game import TOOL_USE_GAME_TASKS, ToolUseGameEnv
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_multi_turn
@@ -194,6 +199,7 @@ config = GRPOConfig(
 )
 
 if __name__ == "__main__":
+    load_dotenv()
     train_multi_turn(config, tasks=tasks, env_factory=lambda task: ToolUseGameEnv(), val_tasks=tasks)
 ```
 
@@ -236,12 +242,15 @@ DATASETS["my_dataset"] = DatasetConfig(
 3. **Create a recipe** in `recipes/grpo/`:
 
 ```python
+from dotenv import load_dotenv
+
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
 
 config = GRPOConfig(model="Qwen/Qwen3.8-27B", dataset="my_dataset", num_examples=5000)
 
 if __name__ == "__main__":
+    load_dotenv()
     train_single_turn(config)
 ```
 
@@ -317,7 +326,7 @@ Step 3 uses the cookbook's builder even in an otherwise SDK-only loop, because i
 validates the payload. To build the `Sample` without the cookbook, read
 `references/sdk-reference.md` ("If you build by hand").
 
-`optim_step` updates the trainer's parameters but does not publish them to the generator. Call `weights_sync` afterwards when subsequent samples should use the update (GRPO and other on-policy loops). Trainer-only SFT/DPO with `num_generator_replicas=0` skip it. Synchronous sampling loops pass `"WEIGHT_SYNC_TYPE_SYNCHRONOUS"`, which publishes before `weights_sync` returns. The other values (`WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH`, `WEIGHT_SYNC_TYPE_PIPELINE`) overlap the publish with in-flight rollouts; `PIPELINE` is rejected on LoRA sessions. See `references/sdk-reference.md` (`weights_sync`).
+`optim_step` updates the trainer's parameters but does not publish them to the generator. Call `weights_sync` afterwards when subsequent samples should use the update (GRPO and other on-policy loops). Trainer-only SFT/DPO with `num_generator_replicas=0` skip it. Synchronous sampling loops pass `"WEIGHT_SYNC_TYPE_SYNCHRONOUS"`, which publishes before `weights_sync` returns. `WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH` and `WEIGHT_SYNC_TYPE_PIPELINE` defer publication. Both support LoRA and full-weight sessions. See `references/sdk-reference.md` (`weights_sync`).
 
 `SampleResult.policy_segments` is sampling-response metadata for client-side staleness tracking — not part of a training `Sample`. Lockstep GRPO ignores it; async multi-turn uses it for `async/mid_rollout_drift_ratio`.
 
@@ -409,7 +418,7 @@ with ModelResourcesClient.create(base_model=base.model, lora_enabled=True) as re
 
 `base` keeps `model` set only so `ModelResourcesClient.create(base_model=base.model)` can provision; each arm sets `model=None` and attaches via `model_resources_id`. Each arm is its own `SessionClient` driving its own event loop; group them in W&B with `wandb_group` so the per-arm validation curves do the model selection.
 
-Teardown: the owner's `ModelResourcesClient` context manager stops the resource exactly once on `__exit__`, and attached tenant sessions only detach — they never stop what they didn't create.
+Each tenant stops its own session and detaches its resource handle. The owner's `ModelResourcesClient` context manager stops the shared resource when it exits. A failed stop raises and preserves any training exception in the traceback.
 
 Copy `scripts/multi_lora_sweep_template.py`, or see `recipes/grpo/deepmath_sweep.py`. Find existing resources with `Together().post_training.model_resources.list(status="MODEL_RESOURCES_STATUS_READY")`; resource enumeration lives on the client, and `ModelResourcesClient` itself has no `.list`.
 
@@ -456,8 +465,8 @@ Omit `load_optimizer` or pass `True` to restore optimizer moments and the step c
 
 Two continuation paths:
 
-1. **Continue the same run** — omit `load_optimizer` or pass `True`. Cookbook: set `training_checkpoint_interval` (default `0` = off), then `resume_from_checkpoint_id` from `runs/<run>/checkpoints.jsonl` on the same recipe config and re-run. GRPO also requires `resume_run_dir` with the matching training record’s saved data state. The client iteration includes empty batches and is distinct from the server optimizer counter. See `references/cookbook-guide.md` for configuration and replay limitations. Not its own recipe.
-2. **Same adapter, new objective** — resume a training checkpoint with `load_optimizer=False`. Cookbook: `SFTConfig`/`GRPOConfig`/`DPOConfig` have `resume_from_checkpoint_id` and `load_optimizer`; `load_optimizer=False` requires a checkpoint id; `sft.train()` returns the last training-checkpoint id. SFT is trainer-only, so GRPO provisions a new resource (same base, same LoRA rank/alpha). Worked example: `recipes/sft_then_grpo.py`.
+1. **Continue the same run** — omit `load_optimizer` or pass `True`. Cookbook: set `training_checkpoint_interval` (default `0` = off), then `resume_from_checkpoint_id` from `<run_dir>/checkpoints.jsonl` on the same recipe config and re-run. GRPO also requires `resume_run_dir` with the matching training record’s saved data state. The client iteration includes empty batches and is distinct from the server optimizer counter. See `references/cookbook-guide.md` for configuration and replay limitations. Not its own recipe.
+2. **Same adapter, new objective** — resume a training checkpoint with `load_optimizer=False`. Cookbook: `SFTConfig`/`GRPOConfig`/`DPOConfig` have `resume_from_checkpoint_id` and `load_optimizer`; `load_optimizer=False` requires a checkpoint id; `sft.train()` returns the run directory; `latest_checkpoint_ref(run_dir, kind="training")` reads the last training-checkpoint id from it. SFT is trainer-only, so GRPO provisions a new resource (same base, same LoRA rank/alpha). Worked example: `recipes/sft_then_grpo.py`.
 Inference checkpoints are for serving and download. They do not seed new training runs.
 
 ### Deploy on Dedicated Model Inference
@@ -604,7 +613,7 @@ recipes/sft/              Ready-to-run SFT recipes (incl. no_robots_full)
 recipes/dpo/              Ready-to-run DPO recipes
 ```
 
-Runs write a self-contained record to `runs/<run_name>/` (config, `manifest.json`, `metrics.jsonl`, per-step rollouts). See `references/cookbook-guide.md` (Run artifacts).
+Runs write a self-contained record to `run_dir` (default `runs/<name>_<UTC timestamp>`; a set `run_dir` must be missing or empty) with config, `manifest.json`, `metrics.jsonl` and per-step rollouts. The `train_*` entry points return that directory. See `references/cookbook-guide.md` (Run artifacts).
 
 ---
 

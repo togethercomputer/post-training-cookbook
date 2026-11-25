@@ -49,6 +49,22 @@ def validate_resume(config: Any) -> None:
         raise ValueError("load_optimizer=False requires resume_from_checkpoint_id")
 
 
+def validate_resource_timeouts(config: Any) -> None:
+    """Reject provisioning-only timeouts when attaching to a shared resource.
+
+    ``training_session`` enforces the same rule; checking here fails the run
+    before any dataset download or tokenization.
+    """
+    if config.model_resources_id is None:
+        return
+    set_timeouts = [name for name in ("ready_timeout_s", "inactive_timeout_s") if getattr(config, name) is not None]
+    if set_timeouts:
+        raise ValueError(
+            f"{', '.join(set_timeouts)} only apply when provisioning a resource; "
+            "unset them, or unset model_resources_id to provision instead of attach"
+        )
+
+
 def validate_lora_config(config: Any) -> None:
     """Reject LoRA fields set under full-weight fine-tuning.
 

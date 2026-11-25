@@ -1,5 +1,7 @@
 """Async multi-turn GRPO on the tool-use game — edit config values below and run."""
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.envs.tool_use_game import TOOL_USE_GAME_TASKS, ToolUseGameEnv
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_multi_turn
@@ -23,6 +25,7 @@ config = GRPOConfig(
 )
 
 if __name__ == "__main__":
+    load_dotenv()
     train_multi_turn(
         config,
         tasks=tasks,

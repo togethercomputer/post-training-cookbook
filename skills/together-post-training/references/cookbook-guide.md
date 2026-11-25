@@ -126,6 +126,8 @@ Unknown keys in the YAML file raise `ValueError`.
 |---|---|---|---|
 | `model` | `str \| None` | `None` | Base model to fine-tune. Required to provision a fresh resource; leave unset when attaching via `model_resources_id`. |
 | `model_resources_id` | `str \| None` | `None` | Attach to an existing shared model resource instead of provisioning one (multi-LoRA). Set this **or** `model`, never both — a shared resource already defines its base model, and naming both raises `ValueError`. See [Multi-LoRA / shared model resources](#multi-lora--shared-model-resources). |
+| `ready_timeout_s` | `float \| None` | `None` | Seconds to wait for a freshly provisioned resource to reach READY before giving up. `None` waits until the server's provisioning timeout (1 h) marks it failed. Provisioning only; raises `ValueError` with `model_resources_id`. |
+| `inactive_timeout_s` | `int \| None` | `None` | Idle seconds before the server auto-stops the provisioned resource. `None` keeps the server default (1 h). Provisioning only; raises `ValueError` with `model_resources_id`. |
 
 #### Training
 
@@ -227,12 +229,14 @@ The `muon_*` fields are ignored unless `optimizer="muon"`. Under Muon the AdamW 
 | `wandb_entity` | `str \| None` | `None` | W&B entity (team or username). |
 | `wandb_run_name` | `str \| None` | `None` | W&B run name (auto-generated if not set). |
 | `wandb_group` | `str \| None` | `None` | W&B group, for clustering related runs. |
+| `wandb_extra_config` | `dict[str, Any]` | `{}` | Caller metadata flattened into the wandb config and run manifest. |
+| `run_dir` | `str \| None` | `None` | Exact run-artifact directory; must be missing or empty. `None` writes to `runs/<wandb_run_name or generated name>_<UTC timestamp>`. See [Run artifacts](#run-artifacts). |
 | `export_samples` | `bool` | `True` | Save per-step completions/episodes and rewards to JSON under the run directory. |
 | `timeout` | `float` | `7200.0` | Timeout for SDK API calls in seconds. |
 | `training_checkpoint_interval` | `int` | `0` | Save a training checkpoint (adapter + optimizer + step) every N steps. `0` disables. |
 | `inference_checkpoint_interval` | `int` | `0` | Save an inference checkpoint every N steps. `0` disables intermediates; a final inference checkpoint is still written at the last step. |
 
-The four `wandb_*` fields are also forwarded to the training session itself, as `display_name=wandb_run_name` and `metadata=SessionMetadata(wandb=...)`, so a session is identifiable by its W&B run from the API side. See [SDK reference: `SessionMetadata`](./sdk-reference.md#sessionmetadata).
+The four identity `wandb_*` fields (`project` / `entity` / `run_name` / `group`) are also forwarded to the training session itself, as `display_name=wandb_run_name` and `metadata=SessionMetadata(wandb=...)`, so a session is identifiable by its W&B run from the API side. `wandb_extra_config` is client-side only (wandb config + run manifest) and is not sent to the session API. See [SDK reference: `SessionMetadata`](./sdk-reference.md#sessionmetadata).
 
 #### Single-turn only
 
@@ -283,6 +287,8 @@ config = SFTConfig(
 |---|---|---|---|
 | `model` | `str \| None` | `None` | Base model. Required unless `model_resources_id` is set. |
 | `model_resources_id` | `str \| None` | `None` | Attach to a shared model resource instead of provisioning one (multi-LoRA). See [Multi-LoRA / shared model resources](#multi-lora--shared-model-resources). |
+| `ready_timeout_s` | `float \| None` | `None` | Seconds to wait for a freshly provisioned resource to reach READY before giving up. `None` waits until the server's provisioning timeout (1 h) marks it failed. Provisioning only; raises `ValueError` with `model_resources_id`. |
+| `inactive_timeout_s` | `int \| None` | `None` | Idle seconds before the server auto-stops the provisioned resource. `None` keeps the server default (1 h). Provisioning only; raises `ValueError` with `model_resources_id`. |
 | `dataset_name` | `str` | `"HuggingFaceH4/no_robots"` | HuggingFace dataset repo ID, or a local directory of `.jsonl` files. |
 | `dataset_config` | `str \| None` | `None` | HF dataset config name. |
 | `dataset_split` | `str` | `"train"` | Dataset split. |
@@ -307,6 +313,7 @@ config = SFTConfig(
 | `wandb_entity` | `str \| None` | `None` | W&B entity (team or username). |
 | `wandb_run_name` | `str \| None` | `None` | W&B run name. |
 | `wandb_group` | `str \| None` | `None` | W&B group, for clustering related runs. |
+| `run_dir` | `str \| None` | `None` | Exact run-artifact directory; must be missing or empty. `None` writes to `runs/<wandb_run_name or generated name>_<UTC timestamp>`. See [Run artifacts](#run-artifacts). |
 | `timeout` | `float` | `7200.0` | SDK timeout in seconds. |
 | `adam_beta1` | `float` | `0.9` | AdamW first moment decay. |
 | `adam_beta2` | `float` | `0.95` | AdamW second moment decay. |
@@ -315,7 +322,7 @@ config = SFTConfig(
 
 Each row must have a `messages` column (a list of `{role, content}` dicts). For any other schema, pass `train(config, to_messages=fn)`, where `fn` maps a row to its messages; put any task instruction (an answer format, for example) in that mapping. `recipes/sft_then_grpo.py` maps GSM8K this way.
 
-SFT creates a trainer-only session (`num_generator_replicas=0`) since it never samples. Per-step metrics are written to `<run_dir>/metrics.jsonl` (see [Run artifacts](#run-artifacts)). `train()` returns the latest training-checkpoint id from `checkpoints.jsonl` (or `None`).
+SFT creates a trainer-only session (`num_generator_replicas=0`) since it never samples. Per-step metrics are written to `<run_dir>/metrics.jsonl` (see [Run artifacts](#run-artifacts)). `train()` returns the run directory; get the latest training-checkpoint id with `latest_checkpoint_ref(run_dir, kind="training")` from `post_training_cookbook.run_artifacts` (`None` if none was saved).
 
 ---
 
@@ -341,7 +348,10 @@ train(config)
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `model` | `str` | `"Qwen/Qwen3.8-27B"` | Base model. |
+| `model` | `str \| None` | `None` | Base model. Required unless `model_resources_id` is set. |
+| `model_resources_id` | `str \| None` | `None` | Attach to a shared model resource instead of provisioning one (multi-LoRA). See [Multi-LoRA / shared model resources](#multi-lora--shared-model-resources). |
+| `ready_timeout_s` | `float \| None` | `None` | Seconds to wait for a freshly provisioned resource to reach READY before giving up. `None` waits until the server's provisioning timeout (1 h) marks it failed. Provisioning only; raises `ValueError` with `model_resources_id`. |
+| `inactive_timeout_s` | `int \| None` | `None` | Idle seconds before the server auto-stops the provisioned resource. `None` keeps the server default (1 h). Provisioning only; raises `ValueError` with `model_resources_id`. |
 | `dataset_name` | `str` | `"nvidia/HelpSteer3"` | HuggingFace dataset repo ID. |
 | `dataset_config` | `str \| None` | `None` | HF dataset config name. |
 | `dataset_split` | `str` | `"train"` | Training split. |
@@ -360,6 +370,7 @@ train(config)
 | `val_subsample` | `int \| None` | `100` | Cap on validation pairs (`0`/`None` disables). |
 | `val_interval` | `int` | `100` | Validate every N steps (`<= 0` disables). |
 | `wandb_project` / `wandb_entity` / `wandb_run_name` / `wandb_group` | — | `None` | W&B settings (disabled when project is `None`). |
+| `run_dir` | `str \| None` | `None` | Exact run-artifact directory; must be missing or empty. `None` writes to `runs/<wandb_run_name or generated name>_<UTC timestamp>`. See [Run artifacts](#run-artifacts). |
 | `timeout` | `float` | `7200.0` | SDK timeout in seconds. |
 | `adam_beta1` / `adam_beta2` / `adam_eps` / `weight_decay` | — | `0.9` / `0.95` / `1e-8` / `0.1` | AdamW parameters. |
 | `use_lora` | `bool` | `True` | LoRA vs full-weight. Allowed modes: [supported-models discovery](./sdk-reference.md#supported-models-and-gpu-hardware). |
@@ -375,7 +386,7 @@ DPO defaults to LoRA (same as SFT/GRPO) and uses a trainer-only session. `train(
 
 ### Checkpoints and resume
 
-`training_checkpoint_interval` and `inference_checkpoint_interval` default to `0` (off). A training checkpoint is written only when its interval hits — set it equal to `max_steps` / `num_steps` if you need one at the end. Ids go in `runs/<run>/checkpoints.jsonl`. A final inference checkpoint is always written at the last step.
+`training_checkpoint_interval` and `inference_checkpoint_interval` default to `0` (off). A training checkpoint is written only when its interval hits — set it equal to `max_steps` / `num_steps` if you need one at the end. Ids go in `<run_dir>/checkpoints.jsonl`. A final inference checkpoint is always written at the last step.
 
 There is no dedicated "resume" recipe. Pause and continue are later processes: copy a training-checkpoint id into `resume_from_checkpoint_id` on the same recipe config and re-run.
 
@@ -401,7 +412,7 @@ Keep the original schedule settings and total target to retain the same LR traje
 
 Preserve or copy the source run directory. Older checkpoints lacking `data_state` cannot reconstruct variable batch consumption and are rejected for continuation; use `load_optimizer=False` to explicitly start a fresh data stream from their weights. Keep custom environment behavior and sampling settings consistent across runs. SFT and DPO restore server state only; their client schedules restart at zero and do not accept `resume_run_dir`.
 
-**New objective from the same adapter (typically SFT→GRPO).** Pass `load_optimizer=False`. Keep the same LoRA rank/alpha. SFT is trainer-only and GRPO needs a generator, so the phases use separate sessions, usually on a **new** resource of the same base model. Worked example: `recipes/sft_then_grpo.py`. Cookbook SFT returns the latest training-checkpoint id from `sft.train()`.
+**New objective from the same adapter (typically SFT→GRPO).** Pass `load_optimizer=False`. Keep the same LoRA rank/alpha. SFT is trainer-only and GRPO needs a generator, so the phases use separate sessions, usually on a **new** resource of the same base model. Worked example: `recipes/sft_then_grpo.py`. `sft.train()` returns the run directory, and `latest_checkpoint_ref(run_dir, kind="training")` reads the checkpoint id from it.
 
 **Serving.** Inference checkpoints are for deployment and download. They do not seed new training runs, so use a training checkpoint with `load_optimizer=False` for that.
 
@@ -521,6 +532,8 @@ Create a new script in `recipes/grpo/`:
 ```python
 """GRPO on my custom dataset."""
 
+from dotenv import load_dotenv
+
 from post_training_cookbook.grpo.config import GRPOConfig
 from post_training_cookbook.grpo.train import train_single_turn
 
@@ -534,6 +547,7 @@ config = GRPOConfig(
 )
 
 if __name__ == "__main__":
+    load_dotenv()  # GRPO entry points no longer load .env on import
     train_single_turn(config)
 ```
 
@@ -789,7 +803,7 @@ Validation needs a quiescent generator, so it cancels the workers and awaits the
 |---|---|
 | `WEIGHT_SYNC_TYPE_SYNCHRONOUS` (default) | Publishes inline. Rollouts drain, the broadcast lands on an idle engine, and the next sample always uses the policy just trained. |
 | `WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH` | Hands the publish to a server-side worker and returns immediately. Rollouts still drain before the broadcast lands. |
-| `WEIGHT_SYNC_TYPE_PIPELINE` | Also deferred, but brackets the broadcast with a KV-cache-preserving scheduler pause instead of draining rollouts. A generation already in flight survives the publish and finishes under the new weights. Requires `use_lora=False`. |
+| `WEIGHT_SYNC_TYPE_PIPELINE` | Defers publication and pauses the scheduler while preserving the KV cache. In-flight generations resume under the new weights. Supports LoRA and full-weight training. |
 
 The deferred modes require asynchronous collection and `GRPOConfig` rejects the combination without it. Under lockstep collection the next step's rollouts would start before the publish had necessarily landed, with no staleness budget bounding the gap and no `async/*` metric revealing it; `max_steps_off_policy` is what makes the resulting drift both bounded and measured.
 
@@ -807,14 +821,14 @@ On-demand billing starts when a newly provisioned model resource becomes READY; 
 
 ### The config field
 
-Both `GRPOConfig` and `SFTConfig` carry `model_resources_id: str | None = None`. A config names **exactly one** model source:
+`GRPOConfig`, `SFTConfig` and `DPOConfig` all carry `model_resources_id: str | None = None`. A config names **exactly one** model source:
 
 - `model` set, `model_resources_id` unset (default) — provision a fresh session for `config.model`.
 - `model_resources_id` set, `model` unset — attach a session to that existing resource instead.
 
 `training_session` raises `ValueError` if both are set (a shared resource already defines its base model) or if neither is.
 
-Nothing else about the training call changes. `train_single_turn` / `train_multi_turn` / `sft.train.train` route through `post_training_cookbook.multi_lora.training_session(...)`, which — when `model_resources_id` is set — checks the resource is `MODEL_RESOURCES_STATUS_READY`, is `lora_enabled` (when `use_lora=True`), and has a generator (for GRPO sampling) before attaching, so a mismatch fails fast instead of mid-run. An attached session leaves the resource running on exit (it only detaches); it never stops a resource it didn't create.
+Nothing else about the training call changes. `train_single_turn` / `train_multi_turn` / `sft.train.train` / `dpo.train.train` route through `post_training_cookbook.multi_lora.training_session_from(config, ...)`, which maps the config onto `training_session(...)`, which — when `model_resources_id` is set — checks the resource is `MODEL_RESOURCES_STATUS_READY`, is `lora_enabled` (when `use_lora=True`), and has a generator (for GRPO sampling) before attaching, so a mismatch fails fast instead of mid-run. Teardown goes through the SDK handles' context managers: the session stops, then a provisioned resource stops while an attached one only detaches — it never stops a resource it didn't create. A failed stop raises rather than being logged; if training also failed, its exception is chained as the stop failure's `__context__`, so both appear in the traceback.
 
 ### Pattern 1: tenant (attach to a resource you don't own)
 
@@ -915,21 +929,26 @@ over = is_overlong(response_length=550, max_response_length=512)
 
 ## Run artifacts
 
-Every recipe writes a self-contained record of the run to `runs/<run_name>/`, built by `post_training_cookbook.run_artifacts`. The run name is derived from the model, project/kind, a hyperparameter slug, and a UTC timestamp (or `wandb_run_name` if you set one).
+Every recipe writes a self-contained record of the run to one directory, built by `post_training_cookbook.run_artifacts`. Set `run_dir` on the config to choose a path that is missing or empty. The default is `runs/<name>_<UTC timestamp>`, where `<name>` is `wandb_run_name` if set or a name derived from the model, project or training kind, and hyperparameters.
+
+A directory holds exactly one run. The trainer claims it before provisioning, so a non-empty `run_dir` fails with `FileExistsError` before any GPUs are allocated, and a rerun never mixes its metrics or checkpoints into an earlier run's. A continued GRPO run also writes to a new directory; `resume_run_dir` is only read.
+
+The `train_*` entry points return the run directory: `train_single_turn` / `train_multi_turn` return `Path | None` (`None` when a resumed run had already reached its target step, so nothing was started), and SFT / DPO `train()` return `Path`.
 
 ```
-runs/<run_name>/
+<run_dir>/
   config.yaml        round-trippable via <Config>.from_yaml(...) (GRPOConfig / SFTConfig / DPOConfig)
-  manifest.json      wandb url, session id, model, start time, git sha
+  manifest.json      wandb url, session and model-resource ids, model, start time, git sha
   metrics.jsonl      one JSON line per step (mirrors what goes to W&B)
   checkpoints.jsonl  training / inference checkpoint ids when an interval fires
   step_NNNN_*.json   per-step rollouts / episodes (when export_samples=True)
   val_NNNN_*.json    validation rollouts (when export_samples=True)
+  wandb/             W&B's local run files (when W&B is enabled)
 ```
 
 `metrics.jsonl` is always written; the bulky `step_*`/`val_*` rollout dumps are skipped when `export_samples=False`. Values that aren't JSON-serializable (for example, the W&B example-output table) are forwarded to W&B but dropped from `metrics.jsonl`.
 
-If you build your own SDK-level loop, the public helpers are `start_run`, `log_step`, `export_samples`, and `export_episodes`. `validate_lora_config` and `lora_config_from` translate a config's `use_lora`/`lora_*` fields into the SDK's `LoraConfig`.
+If you build your own SDK-level loop, the public helpers are `claim_run_dir` (call it before provisioning), `start_run`, `log_step`, `export_samples`, `export_episodes` and `latest_checkpoint_ref`. `validate_lora_config` and `lora_config_from` translate a config's `use_lora`/`lora_*` fields into the SDK's `LoraConfig`.
 
 ---
 

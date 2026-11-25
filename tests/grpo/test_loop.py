@@ -161,16 +161,17 @@ class TestApplyTrainStep:
             apply_train_step(session, samples, 0, 1, config, run, {}, 0.0, overall_start=time.monotonic())
         )
 
+    @pytest.mark.parametrize("use_lora", [True, False], ids=["lora", "full-weight"])
     @pytest.mark.parametrize(
         "weight_sync_type",
         ["WEIGHT_SYNC_TYPE_BACKGROUND_PUBLISH", "WEIGHT_SYNC_TYPE_PIPELINE"],
     )
-    def test_deferred_publish_waits_until_previous_publish_is_applied(self, run, weight_sync_type):
+    def test_deferred_publish_waits_until_previous_publish_is_applied(self, run, weight_sync_type, use_lora):
         # Both deferred modes hand the publish to a server worker that holds the same
         # trainer lock as backward, so both must wait for it to land.
         session = MockSession()
         config = _base_config(
-            weight_sync_type=weight_sync_type, use_lora=False, episodes_per_task=2, max_steps_off_policy=1
+            weight_sync_type=weight_sync_type, use_lora=use_lora, episodes_per_task=2, max_steps_off_policy=1
         )
         session.policy_states = iter([(True, 0, 1), (False, 0, 1), (False, 1, 1)])
 
